@@ -9,7 +9,8 @@ import supabase from './dbConnection.js';
 class EmailService {
   constructor() {
     this.supabase = supabase;
-    this.emailApiUrl = import.meta.env.VITE_EMAIL_API_URL || 'http://localhost:3001/api/send-email';
+    // Usar /api/send-email para producción y desarrollo con Vite proxy
+    this.emailApiUrl = import.meta.env.VITE_EMAIL_API_URL || '/api/send-email';
     this.fromEmail = import.meta.env.VITE_EMAIL_FROM || 'onboarding@resend.dev';
   }
 
