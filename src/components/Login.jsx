@@ -2,6 +2,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import usuarioService from '../services/UsuarioService';
+import emailService from '../services/EmailService';
+import personaService from '../services/PersonaService';
 import { useAuth } from '../hooks/useAuth';
 
 const Login = () => {
@@ -98,6 +100,42 @@ const Login = () => {
         
         // Usar el hook de autenticación
         login(userData);
+
+        // 🔐 ENVIAR CORREO DE NOTIFICACIÓN DE INICIO DE SESIÓN
+        try {
+          // Obtener información de la persona para obtener el nombre
+          let nombreCompleto = usuarioEncontrado.username;
+          if (usuarioEncontrado.id_persona) {
+            const personaResult = await personaService.obtenerPersonaPorId(usuarioEncontrado.id_persona);
+            if (personaResult.success && personaResult.data) {
+              nombreCompleto = `${personaResult.data.nombre} ${personaResult.data.apellido_paterno}`;
+            }
+          }
+
+          // Información del login
+          const loginInfo = {
+            browser: navigator.userAgent.includes('Chrome') ? 'Chrome' : 
+                     navigator.userAgent.includes('Firefox') ? 'Firefox' :
+                     navigator.userAgent.includes('Safari') ? 'Safari' : 'Desconocido',
+            ip: 'Se obtiene del servidor', // En producción se obtendría del backend
+            fecha: new Date().toISOString()
+          };
+
+          // Enviar correo de notificación de inicio de sesión (sin bloquear el login)
+          if (usuarioEncontrado.correo_electronico) {
+            emailService.sendLoginNotification(
+              usuarioEncontrado.correo_electronico,
+              nombreCompleto,
+              loginInfo
+            ).catch(err => {
+              console.error('Error al enviar correo de inicio de sesión:', err);
+              // No mostrar error al usuario para no interrumpir el login
+            });
+          }
+        } catch (emailError) {
+          // Error en envío de correo no debe bloquear el inicio de sesión
+          console.error('Error al enviar notificación de login:', emailError);
+        }
         
         // Redirigir según el rol
         switch (userData.rol) {
