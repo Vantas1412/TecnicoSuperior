@@ -4,16 +4,18 @@ import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 
 // Importar los componentes de secciones
+// src/components/AdminDashboard.jsx
 import {
   DashboardSeccion,
-  ServiciosSeccion, // Cambiado de MantenimientoSeccion
+  ServiciosSeccion,
   NotificacionesSeccion,
   PersonalSeccion,
   IncidentesSeccion,
   ResidentesSeccion,
   ComunicacionSeccion,
   CuentasSeccion,
-  EntradasSeccion
+  EntradasSeccion,
+  FinanzasSeccion, // 👈 NUEVO
 } from './AdminSecciones';
 
 // Nota: ComunicacionSeccion se importa ahora junto con el resto de secciones desde
@@ -33,39 +35,31 @@ const AdminDashboard = () => {
     // Definición de las secciones disponibles en el panel de administrador.  A las
     // secciones originales se añaden "cuentas" y "entradas" para gestionar las
     // cuentas de usuarios y ver el historial de accesos al edificio.
-    const menuItems = [
-      { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-      { id: 'residentes', label: 'Residentes', icon: '👨‍👩‍👧‍👦' },
-      { id: 'personal', label: 'Personal', icon: '👥' },
-      { id: 'servicios', label: 'Servicios', icon: '🔧' },
-      { id: 'incidentes', label: 'Incidentes', icon: '🚨' },
-      { id: 'notificaciones', label: 'Notificaciones', icon: '🔔' },
-      { id: 'comunicacion', label: 'Comunicación', icon: '💬' },
-      // nuevas secciones
-      { id: 'cuentas', label: 'Cuentas', icon: '🔑' },
-      { id: 'entradas', label: 'Entradas', icon: '🚪' }
-    ];
+const menuItems = [
+  { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+  { id: 'finanzas', label: 'Finanzas', icon: '💵' }, // 👈 NUEVO
+  { id: 'residentes', label: 'Residentes', icon: '👨‍👩‍👧‍👦' },
+  { id: 'personal', label: 'Personal', icon: '👥' },
+  { id: 'servicios', label: 'Servicios', icon: '🔧' },
+  { id: 'incidentes', label: 'Incidentes', icon: '🚨' },
+  { id: 'notificaciones', label: 'Notificaciones', icon: '🔔' },
+  { id: 'comunicacion', label: 'Comunicación', icon: '💬' },
+  { id: 'cuentas', label: 'Cuentas', icon: '🔑' },
+  { id: 'entradas', label: 'Entradas', icon: '🚪' }
+];
 
   const renderContent = () => {
     switch (activeSection) {
-      case 'dashboard':
-        return <DashboardSeccion />;
-      case 'residentes':
-        return <ResidentesSeccion />;
-      case 'servicios': // Cambiado de 'mantenimiento'
-        return <ServiciosSeccion />;
-      case 'notificaciones':
-        return <NotificacionesSeccion />;
-      case 'comunicacion':
-        return <ComunicacionSeccion />;
-      case 'personal':
-        return <PersonalSeccion />;
-      case 'incidentes':
-        return <IncidentesSeccion />;
-      case 'cuentas':
-        return <CuentasSeccion />;
-      case 'entradas':
-        return <EntradasSeccion />;
+      case 'dashboard':   return <DashboardSeccion />;
+      case 'finanzas':    return <FinanzasSeccion />; // 👈 NUEVO
+      case 'residentes':  return <ResidentesSeccion />;
+      case 'servicios':   return <ServiciosSeccion />;
+      case 'notificaciones': return <NotificacionesSeccion />;
+      case 'comunicacion':   return <ComunicacionSeccion />;
+      case 'personal':    return <PersonalSeccion />;
+      case 'incidentes':  return <IncidentesSeccion />;
+      case 'cuentas':     return <CuentasSeccion />;
+      case 'entradas':    return <EntradasSeccion />;
       default:
         return (
           <div className="p-6">

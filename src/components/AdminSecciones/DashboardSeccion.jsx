@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
@@ -12,11 +12,12 @@ const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'O
 const DashboardSeccion = () => {
   const { user, logout } = useAuth();
   const [anioSeleccionado, setAnioSeleccionado] = useState(null);
+  const [mesSeleccionado, setMesSeleccionado] = useState(0); // 0 = Todos
   const [aniosDisponibles, setAniosDisponibles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
-  // Datos de los gráficos
+  // Datos
   const [estadisticas, setEstadisticas] = useState({});
   const [ingresos, setIngresos] = useState([]);
   const [gastos, setGastos] = useState([]);
@@ -27,11 +28,35 @@ const DashboardSeccion = () => {
   const [areasConcurridas, setAreasConcurridas] = useState([]);
   const [pagosPorMes, setPagosPorMes] = useState([]);
   const [visitasPorDia, setVisitasPorDia] = useState([]);
-  const [ticketsRecientes, setTicketsRecientes] = useState([]);
 
-  // Cargar años disponibles al inicio
+  // Helpers
+  const formatCurrency = (value) => `Bs ${Number(value || 0).toLocaleString('es-BO', { maximumFractionDigits: 0 })}`;
+  const formatYAxisLabel = (value) => {
+    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+    if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+    return Number(value || 0).toFixed(0);
+  };
+
+  // Rellenar meses 1..12 con 0 si faltan
+  const fillByMonth = (rows, keyTotal = 'total') => {
+    const map = new Map(rows.map(r => [Number(r.mes), r[keyTotal] ?? 0]));
+    return Array.from({ length: 12 }, (_, i) => {
+      const mesNum = i + 1;
+      return { mes: MESES[i], mesNum, [keyTotal]: Number(map.get(mesNum) || 0) };
+    });
+  };
+
+  // Rellenar horas 0..23 con 0 si faltan
+  const fillByHour = (rows, keyHour = 'hora24', keyCount = 'nrocoches') => {
+    const map = new Map(rows.map(r => [Number(r[keyHour]), Number(r[keyCount] || 0)]));
+    return Array.from({ length: 24 }, (_, h) => {
+      return { hora24: h, horaEtiqueta: `${String(h).padStart(2,'0')}:00`, [keyCount]: map.get(h) || 0 };
+    });
+  };
+
+  // Cargar años disponibles
   useEffect(() => {
-    const loadAnios = async () => {
+    (async () => {
       const result = await dashboardService.getAniosDisponibles();
       if (result.success && result.data.length > 0) {
         setAniosDisponibles(result.data);
@@ -39,106 +64,107 @@ const DashboardSeccion = () => {
       } else {
         setAnioSeleccionado(new Date().getFullYear());
       }
-    };
-    loadAnios();
+    })();
   }, []);
 
   // Cargar datos cuando cambia el año
   useEffect(() => {
-    if (anioSeleccionado) {
-      loadData();
-    }
+    if (!anioSeleccionado) return;
+    (async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const [
+          estadisticasRes,
+          ingresosRes,
+          gastosRes,
+          visitasRes,
+          estDiaRes,
+          estHoraRes,
+          estSalidaHoraRes,
+          areasRes,
+          pagosRes,
+          visitasDiaRes
+        ] = await Promise.all([
+          dashboardService.getEstadisticasGenerales(),
+          dashboardService.getIngresosTotales(anioSeleccionado),
+          dashboardService.getGastosTotales(anioSeleccionado),
+          dashboardService.getVisitasPorMesYAnio(anioSeleccionado),
+          dashboardService.getEstacionamientoPorDiaSemana(), // no filtra por año
+          dashboardService.getEstacionamientoEntradaPorHora(), // no filtra por año
+          dashboardService.getEstacionamientoSalidaPorHora(),  // no filtra por año
+          dashboardService.getAreasConcurridas(), // sin año
+          dashboardService.getPagosPorMesYAnio(anioSeleccionado),
+          dashboardService.getVisitasPorDiaMesAnio(anioSeleccionado)
+        ]);
+
+        if (estadisticasRes.success) setEstadisticas(estadisticasRes.data);
+        if (ingresosRes.success) setIngresos(ingresosRes.data || []);
+        if (gastosRes.success) setGastos(gastosRes.data || []);
+        if (visitasRes.success) setVisitas(visitasRes.data || []);
+        if (estDiaRes.success) setEstacionamientoDia(estDiaRes.data || []);
+        if (estHoraRes.success) setEstacionamientoHora(estHoraRes.data || []);
+        if (estSalidaHoraRes.success) setEstacionamientoSalidaHora(estSalidaHoraRes.data || []);
+        if (areasRes.success) setAreasConcurridas(areasRes.data || []);
+        if (pagosRes.success) setPagosPorMes(pagosRes.data || []);
+        if (visitasDiaRes.success) setVisitasPorDia(visitasDiaRes.data || []);
+
+      } catch (err) {
+        console.error('Error cargando datos:', err);
+        setError('Error al cargar los datos del dashboard');
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [anioSeleccionado]);
 
-  const loadData = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const [
-        estadisticasRes,
-        ingresosRes,
-        gastosRes,
-        visitasRes,
-        estDiaRes,
-        estHoraRes,
-        estSalidaHoraRes,
-        areasRes,
-        pagosRes,
-        visitasDiaRes,
-        ticketsRes
-      ] = await Promise.all([
-        dashboardService.getEstadisticasGenerales(),
-        dashboardService.getIngresosTotales(anioSeleccionado),
-        dashboardService.getGastosTotales(anioSeleccionado),
-        dashboardService.getVisitasPorMesYAnio(anioSeleccionado),
-        dashboardService.getEstacionamientoPorDiaSemana(anioSeleccionado),
-        dashboardService.getEstacionamientoEntradaPorHora(anioSeleccionado),
-        dashboardService.getEstacionamientoSalidaPorHora(anioSeleccionado),
-        dashboardService.getAreasConcurridas(anioSeleccionado),
-        dashboardService.getPagosPorMesYAnio(anioSeleccionado),
-        dashboardService.getVisitasPorDiaMesAnio(anioSeleccionado),
-        dashboardService.getTicketsRecientes(5)
-      ]);
+  // === Transformaciones con memo ===
 
-      if (estadisticasRes.success) setEstadisticas(estadisticasRes.data);
-      if (ingresosRes.success) setIngresos(ingresosRes.data);
-      if (gastosRes.success) setGastos(gastosRes.data);
-      if (visitasRes.success) setVisitas(visitasRes.data);
-      if (estDiaRes.success) setEstacionamientoDia(estDiaRes.data);
-      if (estHoraRes.success) setEstacionamientoHora(estHoraRes.data);
-      if (estSalidaHoraRes.success) setEstacionamientoSalidaHora(estSalidaHoraRes.data);
-      if (areasRes.success) setAreasConcurridas(areasRes.data);
-      if (pagosRes.success) setPagosPorMes(pagosRes.data);
-      if (visitasDiaRes.success) setVisitasPorDia(visitasDiaRes.data);
-      if (ticketsRes.success) setTicketsRecientes(ticketsRes.data);
+  // Ingresos vs Gastos (relleno 12 meses, filtro por mes si aplica)
+  const ingresosGastosData = useMemo(() => {
+    const inc = fillByMonth(ingresos, 'total');
+    const gas = fillByMonth(gastos, 'total');
 
-    } catch (err) {
-      console.error('Error cargando datos:', err);
-      setError('Error al cargar los datos del dashboard');
-    } finally {
-      setLoading(false);
-    }
-  };
+    const merged = inc.map((i, idx) => ({
+      mes: i.mes,
+      mesNum: i.mesNum,
+      ingresos: i.total,
+      gastos: gas[idx]?.total ?? 0
+    }));
 
-  // Preparar datos para gráfico de ingresos vs gastos
-  const ingresosGastosData = MESES.map((mes, idx) => {
-    const mesNum = idx + 1;
-    const ingreso = ingresos.find(i => i.mes === mesNum);
-    const gasto = gastos.find(g => g.mes === mesNum);
-    
-    return {
-      mes,
-      ingresos: ingreso?.total || 0,
-      gastos: gasto?.total || 0
-    };
-  });
+    return mesSeleccionado === 0
+      ? merged
+      : merged.filter(r => r.mesNum === mesSeleccionado);
+  }, [ingresos, gastos, mesSeleccionado]);
 
-  // Preparar datos para áreas más visitadas (top 6)
-  const areasVisitadasData = areasConcurridas.slice(0, 6);
+  // Áreas: ordenar por visitas desc y top 6
+  const areasVisitadasData = useMemo(() => {
+    return [...(areasConcurridas || [])]
+      .sort((a, b) => Number(b.nro_visitas || 0) - Number(a.nro_visitas || 0))
+      .slice(0, 6);
+  }, [areasConcurridas]);
 
-  // Preparar datos de estacionamiento combinado (entrada vs salida por hora)
-  const estacionamientoCombinado = estacionamientoHora.map(entrada => {
-    const salida = estacionamientoSalidaHora.find(s => s.hora24 === entrada.hora24);
-    return {
-      hora: `${entrada.hora24}:00`,
-      entradas: entrada.nrocoches || 0,
-      salidas: salida?.nrocoches || 0
-    };
-  });
+  // Estacionamiento (rellenar 0..23 y combinar)
+  const estacionamientoCombinado = useMemo(() => {
+    const entradas = fillByHour(estacionamientoHora, 'hora24', 'nrocoches');
+    const salidas  = fillByHour(estacionamientoSalidaHora, 'hora24', 'nrocoches');
+    const mapSal = new Map(salidas.map(s => [s.hora24, s.nrocoches]));
+    return entradas.map(e => ({
+      hora: e.horaEtiqueta,
+      entradas: e.nrocoches,
+      salidas: mapSal.get(e.hora24) || 0
+    }));
+  }, [estacionamientoHora, estacionamientoSalidaHora]);
 
-  const formatCurrency = (value) => {
-    return `Bs ${Number(value).toLocaleString('es-BO', { maximumFractionDigits: 0 })}`;
-  };
+  // Pagos por mes (rellenar 12, filtrar por mes si aplica)
+  const pagosData = useMemo(() => {
+    const base = fillByMonth(pagosPorMes, 'total').map(r => ({ ...r, total: r.total }));
+    return mesSeleccionado === 0
+      ? base
+      : base.filter(r => r.mesNum === mesSeleccionado);
+  }, [pagosPorMes, mesSeleccionado]);
 
-  const formatYAxisLabel = (value) => {
-    if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-    if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
-    return value.toFixed(0);
-  };
-
-  const handleLogout = () => {
-    logout();
-  };
+  const handleLogout = () => logout();
 
   if (loading && !anioSeleccionado) {
     return (
@@ -154,7 +180,7 @@ const DashboardSeccion = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header con filtro */}
+        {/* Header con filtros */}
         <div className="flex justify-between items-center mb-8 flex-wrap gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-800">Dashboard Analítico</h1>
@@ -164,7 +190,7 @@ const DashboardSeccion = () => {
           </div>
           
           <div className="flex items-center space-x-4">
-            {/* Selector de año */}
+            {/* Año */}
             <div className="flex items-center space-x-2">
               <label className="text-sm font-medium text-gray-700">Año:</label>
               <select
@@ -175,6 +201,21 @@ const DashboardSeccion = () => {
                 <option value="">Todos los años</option>
                 {aniosDisponibles.map(anio => (
                   <option key={anio} value={anio}>{anio}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Mes */}
+            <div className="flex items-center space-x-2">
+              <label className="text-sm font-medium text-gray-700">Mes:</label>
+              <select
+                value={mesSeleccionado}
+                onChange={(e) => setMesSeleccionado(Number(e.target.value))}
+                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value={0}>Todos</option>
+                {MESES.map((m, i) => (
+                  <option key={m} value={i + 1}>{m}</option>
                 ))}
               </select>
             </div>
@@ -208,29 +249,20 @@ const DashboardSeccion = () => {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Estadísticas rápidas */}
+            {/* Estadísticas rápidas (sin tabla de tickets) */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-blue-500">
                 <h3 className="text-gray-600 text-sm font-medium mb-2">Total Residentes</h3>
-                <p className="text-3xl font-bold text-gray-800">
-                  {estadisticas.totalResidentes || 0}
-                </p>
+                <p className="text-3xl font-bold text-gray-800">{estadisticas.totalResidentes || 0}</p>
               </div>
-              
               <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-green-500">
                 <h3 className="text-gray-600 text-sm font-medium mb-2">Total Empleados</h3>
-                <p className="text-3xl font-bold text-gray-800">
-                  {estadisticas.totalEmpleados || 0}
-                </p>
+                <p className="text-3xl font-bold text-gray-800">{estadisticas.totalEmpleados || 0}</p>
               </div>
-              
               <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-purple-500">
                 <h3 className="text-gray-600 text-sm font-medium mb-2">Tickets Pendientes</h3>
-                <p className="text-3xl font-bold text-gray-800">
-                  {estadisticas.ticketsPendientes || 0}
-                </p>
+                <p className="text-3xl font-bold text-gray-800">{estadisticas.ticketsPendientes || 0}</p>
               </div>
-              
               <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-orange-500">
                 <h3 className="text-gray-600 text-sm font-medium mb-2">Departamentos Ocupados</h3>
                 <p className="text-3xl font-bold text-gray-800">
@@ -239,10 +271,29 @@ const DashboardSeccion = () => {
               </div>
             </div>
 
-            {/* Gráfico de Ingresos vs Gastos */}
+            {/* Defs para gradientes (reutilizables) */}
+            <svg width="0" height="0">
+              <defs>
+                <linearGradient id="gradIngresos" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity="1" />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity="0.25" />
+                </linearGradient>
+                <linearGradient id="gradGastos" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#ef4444" stopOpacity="1" />
+                  <stop offset="100%" stopColor="#ef4444" stopOpacity="0.25" />
+                </linearGradient>
+                <linearGradient id="gradPagos" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#8b5cf6" stopOpacity="1" />
+                  <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.25" />
+                </linearGradient>
+              </defs>
+            </svg>
+
+            {/* Ingresos vs Gastos */}
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-4">
                 Ingresos vs Gastos Mensuales {anioSeleccionado && `- ${anioSeleccionado}`}
+                {mesSeleccionado !== 0 && ` ( ${MESES[mesSeleccionado - 1]} )`}
               </h2>
               {ingresosGastosData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={350}>
@@ -250,23 +301,25 @@ const DashboardSeccion = () => {
                     <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                     <XAxis dataKey="mes" stroke="#6b7280" />
                     <YAxis stroke="#6b7280" tickFormatter={formatYAxisLabel} />
-                    <Tooltip formatter={(value) => formatCurrency(value)} />
+                    <Tooltip formatter={(v) => formatCurrency(v)} />
                     <Legend />
                     <Line 
                       type="monotone" 
                       dataKey="ingresos" 
-                      stroke="#10b981" 
+                      stroke="url(#gradIngresos)" 
                       strokeWidth={2}
                       name="Ingresos"
-                      dot={{ fill: '#10b981', r: 4 }}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
                     />
                     <Line 
                       type="monotone" 
                       dataKey="gastos" 
-                      stroke="#ef4444" 
+                      stroke="url(#gradGastos)" 
                       strokeWidth={2}
                       name="Gastos"
-                      dot={{ fill: '#ef4444', r: 4 }}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -277,12 +330,12 @@ const DashboardSeccion = () => {
               )}
             </div>
 
-            {/* Gráficos lado a lado */}
+            {/* Áreas + Estacionamiento por día */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Áreas más concurridas */}
               <div className="bg-white rounded-lg shadow-md p-6">
                 <h2 className="text-xl font-semibold text-gray-800 mb-4">
-                  Áreas Más Concurridas {anioSeleccionado && `- ${anioSeleccionado}`}
+                  Áreas Más Concurridas
                 </h2>
                 {areasVisitadasData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={300}>
@@ -293,14 +346,20 @@ const DashboardSeccion = () => {
                         nameKey="nombre"
                         cx="50%"
                         cy="50%"
-                        outerRadius={100}
+                        outerRadius={105}
                         label={(entry) => `${entry.nombre}: ${entry.nro_visitas}`}
                       >
-                        {areasVisitadasData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        {areasVisitadasData.map((_, idx) => (
+                          <Cell key={idx} fill={COLORS[idx % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip />
+                      <Tooltip
+                        formatter={(v, _name, { payload }) => {
+                          const total = areasVisitadasData.reduce((a, b) => a + Number(b.nro_visitas || 0), 0) || 1;
+                          const pct = ((Number(v || 0) / total) * 100).toFixed(1) + '%';
+                          return [`${v} (${pct})`, payload?.nombre || 'Área'];
+                        }}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 ) : (
@@ -329,7 +388,7 @@ const DashboardSeccion = () => {
                       />
                       <YAxis stroke="#6b7280" tick={{ fontSize: 12 }} />
                       <Tooltip />
-                      <Bar dataKey="nroautos" fill="#3b82f6" name="Vehículos" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="nroautos" fill="#3b82f6" name="Vehículos" radius={[6, 6, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
@@ -343,7 +402,7 @@ const DashboardSeccion = () => {
             {/* Estacionamiento: Entradas vs Salidas por hora */}
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-4">
-                Flujo de Estacionamiento: Entradas vs Salidas por Hora {anioSeleccionado && `- ${anioSeleccionado}`}
+                Flujo de Estacionamiento: Entradas vs Salidas por Hora
               </h2>
               {estacionamientoCombinado.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
@@ -353,8 +412,8 @@ const DashboardSeccion = () => {
                     <YAxis stroke="#6b7280" tick={{ fontSize: 12 }} />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="entradas" fill="#10b981" name="Entradas" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="salidas" fill="#ef4444" name="Salidas" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="entradas" fill="#10b981" name="Entradas" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="salidas" fill="#ef4444" name="Salidas" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -367,7 +426,7 @@ const DashboardSeccion = () => {
             {/* Visitas por día de la semana */}
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-4">
-                Visitas por Día de la Semana {anioSeleccionado && `- ${anioSeleccionado}`}
+                Visitas por Día de la Semana
               </h2>
               {visitasPorDia.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
@@ -383,7 +442,7 @@ const DashboardSeccion = () => {
                     />
                     <YAxis stroke="#6b7280" tick={{ fontSize: 12 }} />
                     <Tooltip />
-                    <Bar dataKey="nrovisitas" fill="#f59e0b" name="Visitas" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="nrovisitas" fill="#f59e0b" name="Visitas" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -397,29 +456,30 @@ const DashboardSeccion = () => {
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-4">
                 Pagos Realizados por Mes {anioSeleccionado && `- ${anioSeleccionado}`}
+                {mesSeleccionado !== 0 && ` ( ${MESES[mesSeleccionado - 1]} )`}
               </h2>
-              {pagosPorMes.length > 0 ? (
+              {pagosData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={pagosPorMes} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                  <LineChart data={pagosData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                     <XAxis 
                       dataKey="mes" 
                       stroke="#6b7280"
-                      tickFormatter={(mes) => MESES[mes - 1]}
                       tick={{ fontSize: 11 }}
                     />
                     <YAxis stroke="#6b7280" tickFormatter={formatYAxisLabel} tick={{ fontSize: 12 }} />
                     <Tooltip 
                       formatter={(value) => formatCurrency(value)}
-                      labelFormatter={(mes) => `Mes: ${MESES[mes - 1]}`}
+                      labelFormatter={(label) => `Mes: ${label}`}
                     />
                     <Line 
                       type="monotone" 
                       dataKey="total" 
-                      stroke="#8b5cf6" 
+                      stroke="url(#gradPagos)" 
                       strokeWidth={2}
                       name="Total Pagado"
-                      dot={{ fill: '#8b5cf6', r: 4 }}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -434,6 +494,7 @@ const DashboardSeccion = () => {
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-4">
                 Resumen Financiero Mensual {anioSeleccionado && `- ${anioSeleccionado}`}
+                {mesSeleccionado !== 0 && ` ( ${MESES[mesSeleccionado - 1]} )`}
               </h2>
               {ingresosGastosData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={350}>
@@ -443,8 +504,8 @@ const DashboardSeccion = () => {
                     <YAxis stroke="#6b7280" tickFormatter={formatYAxisLabel} tick={{ fontSize: 12 }} />
                     <Tooltip formatter={(value) => formatCurrency(value)} />
                     <Legend />
-                    <Bar dataKey="ingresos" fill="#10b981" name="Ingresos" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="gastos" fill="#ef4444" name="Gastos" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="ingresos" fill="url(#gradIngresos)" name="Ingresos" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="gastos" fill="url(#gradGastos)" name="Gastos" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -454,54 +515,6 @@ const DashboardSeccion = () => {
               )}
             </div>
 
-            {/* Tickets Recientes */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Tickets Recientes</h3>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ticket</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Servicio</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Solicitante</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {ticketsRecientes && ticketsRecientes.length > 0 ? (
-                      ticketsRecientes.map((ticket) => (
-                        <tr key={ticket.id_ticket} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-sm text-gray-900">{ticket.id_ticket}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{ticket.servicio?.tipo_servicio}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">
-                            {ticket.persona?.nombre} {ticket.persona?.apellido}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              ticket.estado === 'Completado' ? 'bg-green-100 text-green-800' :
-                              ticket.estado === 'En Proceso' ? 'bg-blue-100 text-blue-800' :
-                              'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {ticket.estado}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-500">
-                            {new Date(ticket.fecha).toLocaleDateString('es-BO')}
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="5" className="px-4 py-8 text-center text-gray-500">
-                          No hay tickets recientes
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
           </div>
         )}
       </div>

@@ -5,7 +5,7 @@ import usuarioService from '../../services/UsuarioService';
 // sistemas sensibles a mayúsculas y minúsculas.  En este proyecto, el
 // servicio de residentes se define en `ResidenteService.js`, por lo que
 // lo importamos con la R mayúscula.
-import residenteService from '../../services/ResidenteService';
+import residenteService from '../../services/residenteService';
 import empleadoService from '../../services/empleadoService';
 
 const initialFormState = (role) => ({

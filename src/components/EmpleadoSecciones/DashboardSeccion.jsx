@@ -1,80 +1,93 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
-} from "recharts";
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  BarChart, Bar, LineChart, Line,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+} from 'recharts';
 import { useAuth } from '../../hooks/useAuth';
 import dashboardService from '../../services/DashboardService';
 
-const COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
 const DashboardSeccion = () => {
   const { user } = useAuth();
-  const [anioSeleccionado, setAnioSeleccionado] = useState(new Date().getFullYear());
+
+  // Filtros
+  const [anio, setAnio] = useState(new Date().getFullYear());
+  const [mesInicio, setMesInicio] = useState(1);
+  const [mesFin, setMesFin] = useState(new Date().getMonth() + 1);
+
+  // Loading / error
   const [loading, setLoading] = useState(true);
-  
-  // Datos de los gráficos específicos para empleados
-  const [tareasCompletadas, setTareasCompletadas] = useState([]);
-  const [horasTrabajadas, setHorasTrabajadas] = useState([]);
-  const [productividad, setProductividad] = useState([]);
-  const [estadisticasEmpleado, setEstadisticasEmpleado] = useState({});
+  const [loadingSQL, setLoadingSQL] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  useEffect(() => {
-    loadDataEmpleado();
-  }, [anioSeleccionado]);
+  // Series de gráficos
+  const [horasExtraDia, setHorasExtraDia] = useState([]); // [{ name:'YYYY-MM-DD', horas_extra }]
+  const [tardePorMes, setTardePorMes] = useState([]);     // [{ name:'YYYY-MM', veces_tarde }]
 
-  const loadDataEmpleado = async () => {
-    setLoading(true);
+  // id_empleado desde el usuario autenticado (ajusta si tu shape cambia)
+  const idEmpleado = useMemo(
+    () => user?.empleado?.id_empleado || user?.empleado?.id || null,
+    [user]
+  );
+
+  // helpers
+  const pad2 = (n) => String(n).padStart(2, '0');
+
+  const rango = useMemo(() => {
+    const desde = `${anio}-${pad2(mesInicio)}-01`;
+    const lastDay = new Date(anio, mesFin, 0).getDate();
+    const hasta = `${anio}-${pad2(mesFin)}-${pad2(lastDay)}`;
+    return { desde, hasta };
+  }, [anio, mesInicio, mesFin]);
+
+  const fetchData = async () => {
+    if (!idEmpleado) {
+      setErrorMsg('No se encontró el id_empleado del usuario autenticado.');
+      setHorasExtraDia([]);
+      setTardePorMes([]);
+      return;
+    }
+    setErrorMsg('');
+    setLoadingSQL(true);
     try {
-      // Simulando datos específicos del empleado
-      const tareasData = [
-        { mes: 1, completadas: 12, pendientes: 3 },
-        { mes: 2, completadas: 15, pendientes: 2 },
-        { mes: 3, completadas: 18, pendientes: 1 },
-        { mes: 4, completadas: 14, pendientes: 4 },
-        { mes: 5, completadas: 16, pendientes: 2 },
-        { mes: 6, completadas: 20, pendientes: 0 }
-      ];
+      const [h, t] = await Promise.all([
+        dashboardService.getHorasExtraPorDia({
+          idEmpleado,
+          desde: rango.desde,
+          hasta: rango.hasta,
+          shape: 'recharts'
+        }),
+        dashboardService.getVecesTardePorMes({
+          idEmpleado,
+          desde: rango.desde,
+          hasta: rango.hasta,
+          shape: 'recharts'
+        })
+      ]);
 
-      const horasData = [
-        { semana: 'Sem 1', horas: 40 },
-        { semana: 'Sem 2', horas: 42 },
-        { semana: 'Sem 3', horas: 38 },
-        { semana: 'Sem 4', horas: 45 },
-        { semana: 'Sem 5', horas: 41 }
-      ];
+      setHorasExtraDia(h.success ? h.data : []);
+      setTardePorMes(t.success ? t.data : []);
 
-      const productividadData = [
-        { tipo: 'Alta', cantidad: 45 },
-        { tipo: 'Media', cantidad: 30 },
-        { tipo: 'Baja', cantidad: 25 }
-      ];
-
-      const stats = {
-        tareasTotales: 85,
-        tareasCompletadas: 75,
-        eficiencia: '88%',
-        horasMes: 166
-      };
-
-      setTareasCompletadas(tareasData);
-      setHorasTrabajadas(horasData);
-      setProductividad(productividadData);
-      setEstadisticasEmpleado(stats);
-
-    } catch (error) {
-      console.error('Error cargando datos del empleado:', error);
+      if (!h.success || !t.success) {
+        setErrorMsg(h.error || t.error || 'No se pudieron cargar todos los datos.');
+      }
+    } catch (e) {
+      console.error(e);
+      setErrorMsg('Ocurrió un error al obtener los datos.');
+      setHorasExtraDia([]);
+      setTardePorMes([]);
     } finally {
       setLoading(false);
+      setLoadingSQL(false);
     }
   };
 
-  const tareasMensualesData = tareasCompletadas.map(item => ({
-    mes: MESES[item.mes - 1],
-    completadas: item.completadas,
-    pendientes: item.pendientes
-  }));
+  // Carga inicial + cuando cambien el id o el rango
+  useEffect(() => {
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idEmpleado, rango.desde, rango.hasta]);
 
   if (loading) {
     return (
@@ -91,129 +104,124 @@ const DashboardSeccion = () => {
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-800">Mi Dashboard</h1>
-          <p className="text-gray-600 mt-2">Resumen de mi desempeño y actividades</p>
+          <p className="text-gray-600 mt-2">Resumen de horas extra y llegadas tarde</p>
         </div>
 
-        {/* Estadísticas rápidas del empleado */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-blue-500">
-            <h3 className="text-gray-600 text-sm font-medium mb-2">Total Tareas</h3>
-            <p className="text-3xl font-bold text-gray-800">
-              {estadisticasEmpleado.tareasTotales || 0}
-            </p>
+        {/* Filtros */}
+        <div className="bg-white rounded-lg shadow-md p-4 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">Año</label>
+              <select
+                className="w-full border rounded-md px-3 py-2 text-gray-800"
+                value={anio}
+                onChange={(e) => setAnio(Number(e.target.value))}
+              >
+                {Array.from({ length: 7 }).map((_, i) => {
+                  const y = new Date().getFullYear() - i;
+                  return <option key={y} value={y}>{y}</option>;
+                })}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">Mes inicio</label>
+              <select
+                className="w-full border rounded-md px-3 py-2 text-gray-800"
+                value={mesInicio}
+                onChange={(e) => setMesInicio(Number(e.target.value))}
+              >
+                {MESES.map((m, i) => <option key={i+1} value={i+1}>{pad2(i+1)} - {m}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">Mes fin</label>
+              <select
+                className="w-full border rounded-md px-3 py-2 text-gray-800"
+                value={mesFin}
+                onChange={(e) => setMesFin(Number(e.target.value))}
+              >
+                {MESES.map((m, i) => <option key={i+1} value={i+1}>{pad2(i+1)} - {m}</option>)}
+              </select>
+            </div>
+
+            <div className="flex items-end">
+              <button
+                onClick={fetchData}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition"
+              >
+                Aplicar filtros
+              </button>
+            </div>
           </div>
-          
-          <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-green-500">
-            <h3 className="text-gray-600 text-sm font-medium mb-2">Completadas</h3>
-            <p className="text-3xl font-bold text-gray-800">
-              {estadisticasEmpleado.tareasCompletadas || 0}
-            </p>
+
+          {/* Rango seleccionado */}
+          <div className="mt-3 text-sm text-gray-600">
+            Rango: <span className="font-medium text-gray-800">{rango.desde}</span> a{' '}
+            <span className="font-medium text-gray-800">{rango.hasta}</span>
+            {loadingSQL && <span className="ml-3 text-blue-600">Actualizando…</span>}
           </div>
-          
-          <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-purple-500">
-            <h3 className="text-gray-600 text-sm font-medium mb-2">Eficiencia</h3>
-            <p className="text-3xl font-bold text-gray-800">
-              {estadisticasEmpleado.eficiencia || '0%'}
-            </p>
-          </div>
-          
-          <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-orange-500">
-            <h3 className="text-gray-600 text-sm font-medium mb-2">Horas/Mes</h3>
-            <p className="text-3xl font-bold text-gray-800">
-              {estadisticasEmpleado.horasMes || 0}
-            </p>
-          </div>
+
+          {errorMsg && (
+            <div className="mt-3 text-sm text-red-600">
+              {errorMsg}
+            </div>
+          )}
         </div>
 
-        {/* Gráficos */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Tareas Completadas vs Pendientes */}
+        {/* SOLO DOS GRÁFICOS */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* 1) Horas extra por día */}
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">
-              Tareas Completadas vs Pendientes
-            </h2>
-            {tareasMensualesData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={tareasMensualesData}>
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">Horas Extra por Día</h2>
+            {horasExtraDia.length > 0 ? (
+              <ResponsiveContainer width="100%" height={320}>
+                <LineChart data={horasExtraDia}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                  <XAxis dataKey="mes" stroke="#6b7280" />
+                  <XAxis dataKey="name" stroke="#6b7280" tick={{ fontSize: 12 }} />
                   <YAxis stroke="#6b7280" />
-                  <Tooltip />
+                  <Tooltip formatter={(v) => [`${v} h`, 'Horas extra']} labelFormatter={(l) => `Fecha: ${l}`} />
                   <Legend />
-                  <Bar dataKey="completadas" fill="#10b981" name="Completadas" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="pendientes" fill="#ef4444" name="Pendientes" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-64">
-                <p className="text-gray-500">No hay datos disponibles</p>
-              </div>
-            )}
-          </div>
-
-          {/* Horas Trabajadas por Semana */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">
-              Horas Trabajadas por Semana
-            </h2>
-            {horasTrabajadas.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={horasTrabajadas}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                  <XAxis dataKey="semana" stroke="#6b7280" />
-                  <YAxis stroke="#6b7280" />
-                  <Tooltip />
-                  <Line 
-                    type="monotone" 
-                    dataKey="horas" 
-                    stroke="#3b82f6" 
+                  <Line
+                    type="monotone"
+                    dataKey="horas_extra"
+                    name="Horas extra"
+                    stroke="#f59e0b"
                     strokeWidth={2}
-                    name="Horas"
-                    dot={{ fill: '#3b82f6', r: 4 }}
+                    dot={{ r: 2 }}
                   />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
               <div className="flex items-center justify-center h-64">
-                <p className="text-gray-500">No hay datos disponibles</p>
+                <p className="text-gray-500">Sin datos en el rango seleccionado</p>
               </div>
             )}
           </div>
-        </div>
 
-        {/* Nivel de Productividad */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">
-            Nivel de Productividad
-          </h2>
-          {productividad.length > 0 ? (
-            <div className="flex justify-center">
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={productividad}
-                    dataKey="cantidad"
-                    nameKey="tipo"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={100}
-                    label={(entry) => `${entry.tipo}: ${entry.cantidad}%`}
-                  >
-                    {productividad.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
+          {/* 2) Veces que llegó tarde por mes */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">Llegadas Tarde por Mes</h2>
+            {tardePorMes.length > 0 ? (
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={tardePorMes}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                  <XAxis dataKey="name" stroke="#6b7280" tick={{ fontSize: 12 }} />
+                  <YAxis stroke="#6b7280" allowDecimals={false} />
+                  <Tooltip formatter={(v) => [v, 'Veces tarde']} labelFormatter={(l) => `Mes: ${l}`} />
+                  <Legend />
+                  <Bar dataKey="veces_tarde" name="Veces tarde" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                </BarChart>
               </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-64">
-              <p className="text-gray-500">No hay datos disponibles</p>
-            </div>
-          )}
+            ) : (
+              <div className="flex items-center justify-center h-64">
+                <p className="text-gray-500">Sin datos en el rango seleccionado</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
