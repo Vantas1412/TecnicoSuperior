@@ -1,0 +1,9 @@
+# Logs
+node_modules/
+*.log
+npm-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env.*.local
