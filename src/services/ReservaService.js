@@ -74,6 +74,19 @@ class ReservaService {
       return { success: false, error: error.message };
     }
   }
+// services/ReservaService.js - Agregar este método
+async crearMultiplesReservas(reservas) {
+  try {
+    const { data, error } = await this.supabase
+      .from('reserva')
+      .insert(reservas);
+    if (error) throw error;
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error al crear múltiples reservas:', error);
+    return { success: false, error: error.message };
+  }
+}
 }
 
 const reservaService = new ReservaService();

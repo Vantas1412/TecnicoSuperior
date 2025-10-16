@@ -1,19 +1,78 @@
 // src/components/Login.jsx
 import React, { useState } from 'react';
+import ReCAPTCHA from 'react-google-recaptcha';
 import { useNavigate } from 'react-router-dom';
 import usuarioService from '../services/UsuarioService';
 import { useAuth } from '../hooks/useAuth';
+
+// ✅ FUNCIÓN PARA ENVIAR CORREOS CON EMAILJS - VERSIÓN MEJORADA
+const enviarCorreoLogin = async (userData) => {
+  try {
+    // ✅ VERIFICAR QUE EXISTA EL EMAIL DEL USUARIO
+    if (!userData.correo_electronico) {
+      console.warn('❌ El usuario no tiene email registrado:', userData.username);
+      return;
+    }
+
+    console.log('📧 Intentando enviar correo a:', userData.correo_electronico);
+    console.log('👤 Datos del usuario:', userData);
+
+    // Import dinámico de EmailJS
+    const emailjs = await import('@emailjs/browser');
+    
+    const templateParams = {
+      to_email: userData.correo_electronico, // ⬅️ ESTE es el email de la persona que ingresa
+      to_name: userData.username,
+      fecha: new Date().toLocaleString('es-ES', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }),
+      rol: userData.rol
+    };
+
+    // ✅ USANDO TUS NUEVAS CREDENCIALES DE EMAILJS
+    const result = await emailjs.send(
+      'service_2vr6cmi',      // Tu Service ID
+      'template_5fck2le',     // Tu Template ID
+      templateParams,
+      's8WnStFlXmsK3l4xq'    // ⬅️ TU NUEVA Public Key CORREGIDA
+    );
+    
+    console.log('✅ Correo de notificación enviado exitosamente a:', userData.correo_electronico);
+    console.log('📨 Respuesta de EmailJS:', result);
+    
+  } catch (error) {
+    console.error('❌ Error enviando correo:', error);
+    console.log('🔍 Detalles del error:', {
+      email: userData.correo_electronico,
+      usuario: userData.username,
+      errorCode: error.code,
+      errorMessage: error.text
+    });
+  }
+};
 
 const Login = () => {
   const [formData, setFormData] = useState({
     username: '',
     password: '',
-    rol: '' // Nuevo campo para el rol
+    rol: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [captchaToken, setCaptchaToken] = useState('');
+  // Eliminado: captchaLoaded, ya no es necesario
   const navigate = useNavigate();
   const { login, isAuthenticated } = useAuth();
+
+  // Clave del sitio reCAPTCHA - reemplaza con tu SITE_KEY
+  const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
+
+  // Ref para el componente ReCAPTCHA
+  const recaptchaRef = React.useRef();
 
   // Si ya está autenticado, redirigir al dashboard correspondiente
   React.useEffect(() => {
@@ -21,6 +80,8 @@ const Login = () => {
       redirectByRole();
     }
   }, [isAuthenticated, navigate]);
+
+  // Eliminado: carga manual de script reCAPTCHA
 
   const redirectByRole = () => {
     const userData = JSON.parse(localStorage.getItem('user'));
@@ -49,6 +110,25 @@ const Login = () => {
     }));
   };
 
+  // Eliminado: función executeRecaptcha
+
+  const verifyCaptcha = async (token) => {
+    try {
+      // En un entorno real, aquí enviarías el token a tu backend para verificación
+      // Por ahora, haremos una verificación básica en el frontend
+      if (!token) {
+        return false;
+      }
+      
+      // En producción, deberías enviar este token a tu backend
+      // y verificar con la SECRET_KEY de reCAPTCHA
+      return true;
+    } catch (error) {
+      console.error('Error verificando CAPTCHA:', error);
+      return false;
+    }
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     
@@ -57,10 +137,25 @@ const Login = () => {
       return;
     }
 
+    // Verificar CAPTCHA
+    if (!captchaToken) {
+      setError('Por favor, completa la verificación CAPTCHA');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     try {
+      // Verificar CAPTCHA
+      const isCaptchaValid = await verifyCaptcha(captchaToken);
+      if (!isCaptchaValid) {
+        setError('Error en la verificación de seguridad. Intenta nuevamente.');
+        setCaptchaToken(''); // Reset CAPTCHA
+        resetCaptcha();
+        return;
+      }
+
       // Obtener todos los usuarios y buscar coincidencia
       const result = await usuarioService.obtenerUsuarios();
       
@@ -73,10 +168,13 @@ const Login = () => {
         usuario => 
           usuario.username === formData.username && 
           usuario.password === formData.password &&
-          usuario.rol === formData.rol // Verificar también el rol
+          usuario.rol === formData.rol
       );
 
       if (usuarioEncontrado) {
+        // ✅ VERIFICAR DATOS DEL USUARIO ENCONTRADO
+        console.log('🔍 USUARIO ENCONTRADO EN BD:', usuarioEncontrado);
+        
         // Verificar si el usuario está activo
         if (usuarioEncontrado.estado !== 'activo') {
           setError('Tu cuenta está inactiva. Contacta al administrador.');
@@ -87,7 +185,7 @@ const Login = () => {
         const userData = {
           id_usuario: usuarioEncontrado.id_usuario,
           username: usuarioEncontrado.username,
-          correo_electronico: usuarioEncontrado.correo_electronico,
+          correo_electronico: usuarioEncontrado.correo_electronico, // ⬅️ ESTE es el campo importante
           rol: usuarioEncontrado.rol,
           estado: usuarioEncontrado.estado,
           id_persona: usuarioEncontrado.id_persona,
@@ -96,8 +194,18 @@ const Login = () => {
           id_auth: usuarioEncontrado.id_auth
         };
         
+        // ✅ VERIFICAR QUE EL EMAIL EXISTA ANTES DE ENVIAR
+        if (!userData.correo_electronico) {
+          console.warn('⚠️ ADVERTENCIA: El usuario no tiene email en la BD:', userData.username);
+        } else {
+          console.log('✅ Email encontrado para el usuario:', userData.correo_electronico);
+        }
+        
         // Usar el hook de autenticación
         login(userData);
+        
+        // ✅ ENVÍO DE CORREO AUTOMÁTICO AL INICIAR SESIÓN
+        enviarCorreoLogin(userData);
         
         // Redirigir según el rol
         switch (userData.rol) {
@@ -116,13 +224,34 @@ const Login = () => {
         
       } else {
         setError('Usuario, contraseña o rol incorrectos');
+        setCaptchaToken(''); // Reset CAPTCHA en error
+        resetCaptcha();
       }
     } catch (error) {
       console.error('Error en login:', error);
       setError('Error al iniciar sesión. Intenta nuevamente.');
+      setCaptchaToken(''); // Reset CAPTCHA en error
+      resetCaptcha();
     } finally {
       setLoading(false);
     }
+  };
+
+  const resetCaptcha = () => {
+    setCaptchaToken('');
+    if (recaptchaRef && recaptchaRef.current) {
+      recaptchaRef.current.reset();
+    }
+  };
+
+  const handleCaptchaVerify = (token) => {
+    setCaptchaToken(token);
+    setError('');
+  };
+
+  const handleCaptchaError = () => {
+    setError('Error al cargar la verificación de seguridad. Recarga la página.');
+    setCaptchaToken('');
   };
 
   // Función para seleccionar automáticamente un usuario de prueba
@@ -132,6 +261,9 @@ const Login = () => {
       password,
       rol
     });
+    // Reset CAPTCHA cuando se selecciona un usuario demo
+    setCaptchaToken('');
+    resetCaptcha();
   };
 
   return (
@@ -203,6 +335,29 @@ const Login = () => {
             />
           </div>
 
+          {/* Componente CAPTCHA con react-google-recaptcha */}
+          <div className="captcha-container">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Verificación de Seguridad
+            </label>
+            <ReCAPTCHA
+              ref={recaptchaRef}
+              sitekey={RECAPTCHA_SITE_KEY}
+              onChange={handleCaptchaVerify}
+              onErrored={handleCaptchaError}
+              onExpired={() => setCaptchaToken('')}
+              theme="light"
+            />
+            {captchaToken && (
+              <div className="text-green-600 text-sm mt-2 flex items-center">
+                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                Verificación completada
+              </div>
+            )}
+          </div>
+
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
               {error}
@@ -211,7 +366,7 @@ const Login = () => {
 
           <button 
             type="submit" 
-            disabled={loading || !formData.username || !formData.password || !formData.rol}
+            disabled={loading || !formData.username || !formData.password || !formData.rol || !captchaToken}
             className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center"
           >
             {loading ? (

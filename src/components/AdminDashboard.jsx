@@ -10,7 +10,8 @@ import {
   NotificacionesSeccion,
   PersonalSeccion,
   IncidentesSeccion,
-  ResidentesSeccion
+  ResidentesSeccion,
+  EntradasSeccion
 } from './AdminSecciones';
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
@@ -22,14 +23,15 @@ const AdminDashboard = () => {
     navigate('/login');
   };
 
-    const menuItems = [
+  const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'residentes', label: 'Residentes', icon: '👨‍👩‍👧‍👦' },
     { id: 'personal', label: 'Personal', icon: '👥' },
-    { id: 'servicios', label: 'Servicios', icon: '🔧' }, // Cambiado de 'mantenimiento'
+    { id: 'servicios', label: 'Servicios', icon: '🔧' },
+    { id: 'entradas', label: 'Entradas', icon: '�' },
     { id: 'incidentes', label: 'Incidentes', icon: '🚨' },
     { id: 'notificaciones', label: 'Notificaciones', icon: '🔔' },
-    ];
+  ];
 
   const renderContent = () => {
     switch (activeSection) {
@@ -37,8 +39,10 @@ const AdminDashboard = () => {
         return <DashboardSeccion />;
       case 'residentes':
         return <ResidentesSeccion />;
-      case 'servicios': // Cambiado de 'mantenimiento'
+      case 'servicios':
         return <ServiciosSeccion />;
+      case 'entradas':
+        return <EntradasSeccion />;
       case 'notificaciones':
         return <NotificacionesSeccion />;
       case 'personal':

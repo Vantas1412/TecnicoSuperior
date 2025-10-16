@@ -82,6 +82,22 @@ class AreaComunService {
       return { success: false, error: error.message };
     }
   }
+// En src/services/AreaComunService.js - Actualizar la función
+async obtenerHorariosOcupados(id_area, fecha) {
+  try {
+    const { data, error } = await this.supabase
+      .rpc('obtener_horarios_por_area', { 
+        p_id_area: id_area,
+        p_fecha_reservacion: fecha
+      });
+
+    if (error) throw error;
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error al obtener horarios ocupados:', error);
+    return { success: false, error: error.message, data: [] };
+  }
+}
 }
 
 const areaComunService = new AreaComunService();

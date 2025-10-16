@@ -170,6 +170,37 @@ class TicketService {
       return { success: false, error: error.message };
     }
   }
+    // SE AGREGO ESTO Y SHA
+
+async obtenerTicketsPorEmpleadoCompleto(id_empleado) {
+  try {
+    const { data, error } = await this.supabase
+      .from('ticket')
+      .select(`
+        id_ticket,
+        descripcion,
+        tipo,
+        estado,
+        fecha,
+        fechafin,
+        persona:id_persona (
+          nombre,
+          apellido
+        ),
+        servicio:id_servicio (
+          tipo_servicio
+        )
+      `)
+      .eq('id_empleado', id_empleado)
+      .order('fecha', { ascending: false });
+      
+    if (error) throw error;
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error al obtener tickets por empleado:', error);
+    return { success: false, error: error.message, data: [] };
+  }
+}
 
   async cambiarEstado(id_ticket, nuevoEstado) {
     try {

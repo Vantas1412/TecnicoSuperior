@@ -135,6 +135,41 @@ async obtenerPersonasNoResidentes() {
     return { success: false, error: error.message, data: [] };
   }
 }  
+
+// En src/services/PersonaService.js - Añadir estas funciones al final de la clase
+
+async obtenerPagosPorPagador(id_pagador) {
+  try {
+    // Ejecutar la función de PostgreSQL que creaste
+    const { data, error } = await this.supabase
+      .rpc('obtener_pagos_por_pagador', { 
+        p_id_pagador: id_pagador 
+      });
+
+    if (error) throw error;
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error al obtener pagos por pagador:', error);
+    return { success: false, error: error.message, data: [] };
+  }
+}
+
+async obtenerDeudasPorEstado(id_persona, estado) {
+  try {
+    // Ejecutar la función de PostgreSQL que creaste
+    const { data, error } = await this.supabase
+      .rpc('obtener_deudas_por_estado', { 
+        p_id_persona: id_persona,
+        p_estado: estado
+      });
+
+    if (error) throw error;
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error al obtener deudas por estado:', error);
+    return { success: false, error: error.message, data: [] };
+  }
+}
 }
 
 const personaService = new PersonaService();

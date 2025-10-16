@@ -5,3 +5,4 @@ export { default as NotificacionesSeccion } from './NotificacionesSeccion';
 export { default as PersonalSeccion } from './PersonalSeccion';
 export { default as IncidentesSeccion } from './IncidentesSeccion';
 export { default as ResidentesSeccion } from './ResidentesSeccion';
+export { default as EntradasSeccion } from './EntradasSeccion';
