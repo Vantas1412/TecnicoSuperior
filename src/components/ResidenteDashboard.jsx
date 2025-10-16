@@ -15,7 +15,7 @@ import {
 import ComunicacionSeccion from './ResidenteSecciones/ComunicacionSeccion';
 
 const ResidenteDashboard = () => {
-  const { user, logout } = useAuth();
+  const { profile, logout } = useAuth();
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('dashboard');
 
@@ -65,13 +65,13 @@ const ResidenteDashboard = () => {
           <h2 className="text-xl font-bold mb-4">Residente Panel</h2>
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center font-bold text-white">
-              {user?.username?.charAt(0).toUpperCase()}
+              {profile?.persona?.nombre?.charAt(0).toUpperCase() || profile?.username?.charAt(0).toUpperCase() || 'R'}
             </div>
             <div className="flex flex-col">
-              <span className="font-semibold text-sm">{user?.username}</span>
-              <span className="text-xs text-green-200 capitalize">{user?.rol}</span>
+              <span className="font-semibold text-sm">{profile?.persona?.nombre || profile?.username}</span>
+              <span className="text-xs text-green-200 capitalize">{profile?.rol}</span>
               {/* Mostrar ID Persona */}
-              <span className="text-xs text-green-300 mt-1">ID: {user?.id_persona}</span>
+              <span className="text-xs text-green-300 mt-1">ID: {profile?.id_persona}</span>
             </div>
           </div>
         </div>
@@ -115,9 +115,9 @@ const ResidenteDashboard = () => {
               {menuItems.find(item => item.id === activeSection)?.label || 'Dashboard'} - Residente
             </h1>
             <div className="text-gray-600 text-right">
-              <div>Bienvenido, <span className="font-semibold text-gray-800">{user?.username}</span></div>
+              <div>Bienvenido, <span className="font-semibold text-gray-800">{profile?.persona?.nombre || profile?.username || 'Usuario'}</span></div>
               {/* Mostrar ID Persona en el header */}
-              <div className="text-sm text-gray-500">ID Persona: <span className="font-mono">{user?.id_persona}</span></div>
+              <div className="text-sm text-gray-500">ID Persona: <span className="font-mono">{profile?.id_persona}</span></div>
             </div>
           </div>
         </header>

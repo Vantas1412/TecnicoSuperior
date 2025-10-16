@@ -21,7 +21,7 @@ import {
 // provenientes de la versión combinada para gestionar cuentas de usuario y el
 // registro de entradas.
 const AdminDashboard = () => {
-  const { user, logout } = useAuth();
+  const { profile, logout } = useAuth();
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('dashboard');
 
@@ -87,11 +87,11 @@ const AdminDashboard = () => {
           <h2 className="text-xl font-bold mb-4">Admin Panel</h2>
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center font-bold text-white">
-              {user?.username?.charAt(0).toUpperCase()}
+              {profile?.persona?.nombre?.charAt(0).toUpperCase() || profile?.username?.charAt(0).toUpperCase() || 'A'}
             </div>
             <div className="flex flex-col">
-              <span className="font-semibold text-sm">{user?.username}</span>
-              <span className="text-xs text-blue-200 capitalize">{user?.rol}</span>
+              <span className="font-semibold text-sm">{profile?.persona?.nombre || profile?.username}</span>
+              <span className="text-xs text-blue-200 capitalize">{profile?.rol}</span>
             </div>
           </div>
         </div>
@@ -135,7 +135,7 @@ const AdminDashboard = () => {
               {menuItems.find(item => item.id === activeSection)?.label || 'Dashboard'}
             </h1>
             <div className="text-gray-600">
-              Bienvenido, <span className="font-semibold text-gray-800">{user?.username}</span>
+              Bienvenido, <span className="font-semibold text-gray-800">{profile?.persona?.nombre || profile?.username || 'Usuario'}</span>
             </div>
           </div>
         </header>
