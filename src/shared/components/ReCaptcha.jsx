@@ -5,8 +5,9 @@ import { useEffect, useRef, useState } from 'react'
  * @param {function} onVerify - Callback que recibe el token cuando se verifica el captcha
  * @param {function} onExpired - Callback cuando el captcha expira
  * @param {function} onError - Callback cuando hay un error
+ * @param {boolean} verified - Estado de verificación del captcha
  */
-export default function ReCaptcha({ onVerify, onExpired, onError }) {
+export default function ReCaptcha({ onVerify, onExpired, onError, verified = false }) {
   const recaptchaRef = useRef(null)
   const widgetId = useRef(null)
 
@@ -122,7 +123,7 @@ export default function ReCaptcha({ onVerify, onExpired, onError }) {
 
   return (
     <div className="flex flex-col items-center">
-      <div ref={recaptchaRef} className="mb-2"></div>
+      <div ref={recaptchaRef}></div>
     </div>
   )
 }

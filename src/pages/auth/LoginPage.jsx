@@ -435,6 +435,7 @@ export default function LoginPage() {
               onVerify={handleRecaptchaVerify}
               onExpired={handleRecaptchaExpired}
               onError={handleRecaptchaError}
+              verified={recaptchaVerified}
             />
 
             {/* Submit Button */}
