@@ -4,6 +4,7 @@ import ReCAPTCHA from 'react-google-recaptcha';
 import { useNavigate } from 'react-router-dom';
 import usuarioService from '../services/UsuarioService';
 import { useAuth } from '../hooks/useAuth';
+import RecuperarContraseña from './RecuperarContraseña'; // ✅ Importa el componente
 
 // ✅ FUNCIÓN PARA ENVIAR CORREOS CON EMAILJS - VERSIÓN MEJORADA
 const enviarCorreoLogin = async (userData) => {
@@ -64,7 +65,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [captchaToken, setCaptchaToken] = useState('');
-  // Eliminado: captchaLoaded, ya no es necesario
+  const [showRecuperarContraseña, setShowRecuperarContraseña] = useState(false); // ✅ NUEVO ESTADO
   const navigate = useNavigate();
   const { login, isAuthenticated } = useAuth();
 
@@ -80,8 +81,6 @@ const Login = () => {
       redirectByRole();
     }
   }, [isAuthenticated, navigate]);
-
-  // Eliminado: carga manual de script reCAPTCHA
 
   const redirectByRole = () => {
     const userData = JSON.parse(localStorage.getItem('user'));
@@ -109,8 +108,6 @@ const Login = () => {
       [name]: value
     }));
   };
-
-  // Eliminado: función executeRecaptcha
 
   const verifyCaptcha = async (token) => {
     try {
@@ -381,7 +378,46 @@ const Login = () => {
               'Iniciar Sesión'
             )}
           </button>
+
+          {/* ✅ BOTÓN "NO ME ACUERDO DE MI CONTRASEÑA" */}
+          <div className="text-center mt-4">
+            <button
+              type="button"
+              onClick={() => setShowRecuperarContraseña(true)}
+              className="text-blue-600 hover:text-blue-800 text-sm font-medium transition duration-200 underline"
+            >
+              No me acuerdo de mi contraseña
+            </button>
+          </div>
         </form>
+
+        {/* ✅ MODAL DE RECUPERACIÓN DE CONTRASEÑA */}
+        {showRecuperarContraseña && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold text-gray-900">Recuperar Contraseña</h3>
+                <button
+                  onClick={() => setShowRecuperarContraseña(false)}
+                  className="text-gray-400 hover:text-gray-600 transition duration-200"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                  </svg>
+                </button>
+              </div>
+              
+              <RecuperarContraseña 
+                onClose={() => setShowRecuperarContraseña(false)}
+                onSuccess={() => {
+                  setShowRecuperarContraseña(false);
+                  // Opcional: mostrar mensaje de éxito
+                  setError(''); // Limpiar errores anteriores
+                }}
+              />
+            </div>
+          </div>
+        )}
 
         <div className="mt-8 pt-6 border-t border-gray-200">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 text-center">
