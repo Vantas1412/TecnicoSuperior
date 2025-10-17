@@ -1,7 +1,7 @@
 // src/components/AdminSecciones/QuejasSeccion.jsx
 import React, { useState, useEffect } from 'react';
 import { fetchComplaints, respondComplaint } from '../../services/SupabaseService';
-import emailService from '../../services/EmailService';
+// ...existing code...
 import { useAuth } from '../../hooks/useAuth';
 
 /**
@@ -48,9 +48,9 @@ const QuejasSeccion = () => {
       // Si la queja no es anónima y tiene usuario_id, enviar un correo al residente
       if (quejaActual && !quejaActual.anonima && quejaActual.usuario_id) {
         try {
-          await emailService.sendComplaintResponseEmail(quejaActual.usuario_id, respuestas[id_queja]);
+          // EmailService eliminado: aquí puedes integrar el nuevo sistema de email si es necesario
         } catch (emailErr) {
-          console.error('Error enviando correo de respuesta de queja:', emailErr);
+          // Error de emailService eliminado
         }
       }
       setRespuestas(prev => ({ ...prev, [id_queja]: '' }));
