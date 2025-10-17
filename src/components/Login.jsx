@@ -2,7 +2,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import usuarioService from '../services/UsuarioService';
-import emailService from '../services/EmailService';
 import personaService from '../services/PersonaService';
 import { useAuth } from '../hooks/useAuth';
 
@@ -123,18 +122,11 @@ const Login = () => {
 
           // Enviar correo de notificación de inicio de sesión (sin bloquear el login)
           if (usuarioEncontrado.correo_electronico) {
-            emailService.sendLoginNotification(
-              usuarioEncontrado.correo_electronico,
-              nombreCompleto,
-              loginInfo
-            ).catch(err => {
-              console.error('Error al enviar correo de inicio de sesión:', err);
-              // No mostrar error al usuario para no interrumpir el login
-            });
+            // EmailService eliminado: aquí puedes integrar el nuevo sistema de email si es necesario
           }
         } catch (emailError) {
           // Error en envío de correo no debe bloquear el inicio de sesión
-          console.error('Error al enviar notificación de login:', emailError);
+          // Error de emailService eliminado
         }
         
         // Redirigir según el rol

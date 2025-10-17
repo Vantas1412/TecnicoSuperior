@@ -1,6 +1,6 @@
 // src/services/notificacionesService.js
 import supabase from './dbConnection.js';
-import emailService from './EmailService.js';
+// ...existing code...
 
 class NotificacionesService {
   constructor() {
@@ -23,7 +23,7 @@ class NotificacionesService {
       if (error) throw error;
       // Enviar correo electrónico al destinatario
       try {
-        await emailService.sendNotificationEmail(id_usuario, titulo, mensaje);
+  // EmailService eliminado: aquí puedes integrar el nuevo sistema de email si es necesario
       } catch (e) {
         console.error('Error enviando correo de notificación individual:', e);
       }
@@ -65,7 +65,7 @@ class NotificacionesService {
       if (error) throw error;
       // Enviar correos electrónicos a todos los residentes activos
       try {
-        await emailService.sendGroupEmails(['residente'], `Notificación: ${titulo}`, mensaje);
+  // EmailService eliminado: aquí puedes integrar el nuevo sistema de email si es necesario
       } catch (e) {
         console.error('Error enviando correos a residentes:', e);
       }
@@ -107,7 +107,7 @@ class NotificacionesService {
       if (error) throw error;
       // Enviar correos electrónicos a todos los empleados activos
       try {
-        await emailService.sendGroupEmails(['empleado'], `Notificación: ${titulo}`, mensaje);
+  // EmailService eliminado: aquí puedes integrar el nuevo sistema de email si es necesario
       } catch (e) {
         console.error('Error enviando correos a empleados:', e);
       }
@@ -148,7 +148,7 @@ class NotificacionesService {
       if (error) throw error;
       // Enviar correos electrónicos a todos los usuarios activos
       try {
-        await emailService.sendGroupEmails(['residente', 'empleado', 'admin'], `Notificación: ${titulo}`, mensaje);
+  // EmailService eliminado: aquí puedes integrar el nuevo sistema de email si es necesario
       } catch (e) {
         console.error('Error enviando correos globales:', e);
       }

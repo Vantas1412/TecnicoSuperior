@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { createAnnouncement } from '../services/SupabaseService';
 import notificacionesService from '../services/notificacionesService';
-import emailService from '../services/EmailService';
+// ...existing code...
 
 /**
  * Formulario para que el administrador cree un nuevo aviso (anuncio).
@@ -36,7 +36,7 @@ const CreateAnnouncementForm = () => {
       await notificacionesService.crearNotificacionTodosResidentes(titulo, contenido);
       await notificacionesService.crearNotificacionTodosEmpleados(titulo, contenido);
       // Enviar correos
-      await emailService.sendAnnouncementEmails(titulo, contenido);
+  // EmailService eliminado: aquí puedes integrar el nuevo sistema de email si es necesario
       setMensaje('Aviso enviado correctamente.');
       // Limpiar el formulario
       setTitulo('');
