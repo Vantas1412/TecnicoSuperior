@@ -17,7 +17,7 @@ import {
 } from './EmpleadoSecciones';
 
 const EmpleadoDashboard = () => {
-  const { user, logout } = useAuth();
+  const { profile, logout } = useAuth();
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('dashboard');
 
@@ -38,7 +38,7 @@ const EmpleadoDashboard = () => {
   ];
 
   // Añadimos "Entradas" si el usuario es de tipo Seguridad
-  if (user?.empleado?.tipo === 'Seguridad') {
+  if (profile?.empleado?.tipo === 'Seguridad') {
     menuItems.push({ id: 'entradas', label: 'Entradas', icon: '🚪' });
   }
 
@@ -71,15 +71,15 @@ const EmpleadoDashboard = () => {
           <h2 className="text-xl font-bold mb-4">EMPLEADO</h2>
           <div className="flex items-center space-x-3">
             <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center font-bold text-white text-lg">
-              {user?.persona?.nombre?.charAt(0) || user?.username?.charAt(0).toUpperCase()}
+              {profile?.persona?.nombre?.charAt(0) || profile?.username?.charAt(0).toUpperCase()}
             </div>
             <div className="flex flex-col">
               <span className="text-xs text-green-200">BIENVENIDO</span>
               <span className="font-semibold text-sm">
-                {user?.persona?.nombre || user?.username}
+                {profile?.persona?.nombre || profile?.username}
               </span>
               <span className="text-xs text-green-200 capitalize">
-                {user?.empleado?.tipo || 'Empleado'}
+                {profile?.empleado?.tipo || 'Empleado'}
               </span>
             </div>
           </div>
@@ -125,10 +125,10 @@ const EmpleadoDashboard = () => {
             </h1>
             <div className="text-gray-600">
               <span className="font-semibold text-gray-800">
-                {user?.persona?.nombre || user?.username}
+                {profile?.persona?.nombre || profile?.username}
               </span>
               <span className="ml-2 text-sm text-gray-500">
-                - {user?.empleado?.tipo || 'Empleado'}
+                - {profile?.empleado?.tipo || 'Empleado'}
               </span>
             </div>
           </div>

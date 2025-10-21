@@ -4,16 +4,18 @@ import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 
 // Importar los componentes de secciones
+// src/components/AdminDashboard.jsx
 import {
   DashboardSeccion,
-  ServiciosSeccion, // Cambiado de MantenimientoSeccion
+  ServiciosSeccion,
   NotificacionesSeccion,
   PersonalSeccion,
   IncidentesSeccion,
   ResidentesSeccion,
   ComunicacionSeccion,
   CuentasSeccion,
-  EntradasSeccion
+  EntradasSeccion,
+  FinanzasSeccion, // 👈 NUEVO
 } from './AdminSecciones';
 
 // Nota: ComunicacionSeccion se importa ahora junto con el resto de secciones desde
@@ -21,7 +23,7 @@ import {
 // provenientes de la versión combinada para gestionar cuentas de usuario y el
 // registro de entradas.
 const AdminDashboard = () => {
-  const { user, logout } = useAuth();
+  const { profile, logout } = useAuth();
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('dashboard');
 
@@ -33,39 +35,31 @@ const AdminDashboard = () => {
     // Definición de las secciones disponibles en el panel de administrador.  A las
     // secciones originales se añaden "cuentas" y "entradas" para gestionar las
     // cuentas de usuarios y ver el historial de accesos al edificio.
-    const menuItems = [
-      { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-      { id: 'residentes', label: 'Residentes', icon: '👨‍👩‍👧‍👦' },
-      { id: 'personal', label: 'Personal', icon: '👥' },
-      { id: 'servicios', label: 'Servicios', icon: '🔧' },
-      { id: 'incidentes', label: 'Incidentes', icon: '🚨' },
-      { id: 'notificaciones', label: 'Notificaciones', icon: '🔔' },
-      { id: 'comunicacion', label: 'Comunicación', icon: '💬' },
-      // nuevas secciones
-      { id: 'cuentas', label: 'Cuentas', icon: '🔑' },
-      { id: 'entradas', label: 'Entradas', icon: '🚪' }
-    ];
+const menuItems = [
+  { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+  { id: 'finanzas', label: 'Finanzas', icon: '💵' }, // 👈 NUEVO
+  { id: 'residentes', label: 'Residentes', icon: '👨‍👩‍👧‍👦' },
+  { id: 'personal', label: 'Personal', icon: '👥' },
+  { id: 'servicios', label: 'Servicios', icon: '🔧' },
+  { id: 'incidentes', label: 'Incidentes', icon: '🚨' },
+  { id: 'notificaciones', label: 'Notificaciones', icon: '🔔' },
+  { id: 'comunicacion', label: 'Comunicación', icon: '💬' },
+  { id: 'cuentas', label: 'Cuentas', icon: '🔑' },
+  { id: 'entradas', label: 'Entradas', icon: '🚪' }
+];
 
   const renderContent = () => {
     switch (activeSection) {
-      case 'dashboard':
-        return <DashboardSeccion />;
-      case 'residentes':
-        return <ResidentesSeccion />;
-      case 'servicios': // Cambiado de 'mantenimiento'
-        return <ServiciosSeccion />;
-      case 'notificaciones':
-        return <NotificacionesSeccion />;
-      case 'comunicacion':
-        return <ComunicacionSeccion />;
-      case 'personal':
-        return <PersonalSeccion />;
-      case 'incidentes':
-        return <IncidentesSeccion />;
-      case 'cuentas':
-        return <CuentasSeccion />;
-      case 'entradas':
-        return <EntradasSeccion />;
+      case 'dashboard':   return <DashboardSeccion />;
+      case 'finanzas':    return <FinanzasSeccion />; // 👈 NUEVO
+      case 'residentes':  return <ResidentesSeccion />;
+      case 'servicios':   return <ServiciosSeccion />;
+      case 'notificaciones': return <NotificacionesSeccion />;
+      case 'comunicacion':   return <ComunicacionSeccion />;
+      case 'personal':    return <PersonalSeccion />;
+      case 'incidentes':  return <IncidentesSeccion />;
+      case 'cuentas':     return <CuentasSeccion />;
+      case 'entradas':    return <EntradasSeccion />;
       default:
         return (
           <div className="p-6">
@@ -87,11 +81,11 @@ const AdminDashboard = () => {
           <h2 className="text-xl font-bold mb-4">Admin Panel</h2>
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center font-bold text-white">
-              {user?.username?.charAt(0).toUpperCase()}
+              {profile?.persona?.nombre?.charAt(0).toUpperCase() || profile?.username?.charAt(0).toUpperCase() || 'A'}
             </div>
             <div className="flex flex-col">
-              <span className="font-semibold text-sm">{user?.username}</span>
-              <span className="text-xs text-blue-200 capitalize">{user?.rol}</span>
+              <span className="font-semibold text-sm">{profile?.persona?.nombre || profile?.username}</span>
+              <span className="text-xs text-blue-200 capitalize">{profile?.rol}</span>
             </div>
           </div>
         </div>
@@ -135,7 +129,7 @@ const AdminDashboard = () => {
               {menuItems.find(item => item.id === activeSection)?.label || 'Dashboard'}
             </h1>
             <div className="text-gray-600">
-              Bienvenido, <span className="font-semibold text-gray-800">{user?.username}</span>
+              Bienvenido, <span className="font-semibold text-gray-800">{profile?.persona?.nombre || profile?.username || 'Usuario'}</span>
             </div>
           </div>
         </header>

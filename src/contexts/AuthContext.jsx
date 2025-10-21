@@ -1,205 +1,248 @@
-/* // src/contexts/AuthContext.jsx
-import React, { createContext, useState, useEffect } from 'react';
+// src/contexts/AuthContext.jsx
+import { createContext, useContext, useState, useEffect, useRef } from 'react'
+import { supabase } from '../services/apiClient'
+import authService from '../services/authService'
 
-export const AuthContext = createContext();
+/**
+ * 🔐 AUTH CONTEXT
+ * Manejo global de autenticación con Supabase
+ */
+
+const AuthContext = createContext({})
+
+export const useAuth = () => {
+  const context = useContext(AuthContext)
+  if (!context) {
+    throw new Error('useAuth debe usarse dentro de AuthProvider')
+  }
+  return context
+}
 
 export const AuthProvider = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null)
+  const [session, setSession] = useState(null)
+  const [profile, setProfile] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const loadingProfileRef = useRef(null) // Evitar llamadas duplicadas
+  const profileCacheRef = useRef({}) // Cache de perfiles
 
+  // Inicializar sesión
   useEffect(() => {
-    const checkAuth = () => {
-      const authStatus = localStorage.getItem('isAuthenticated');
-      const userData = localStorage.getItem('user');
+    console.log('🚀 Iniciando AuthContext')
+    let mounted = true
+
+    // Obtener sesión actual
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return
       
-      if (authStatus === 'true' && userData) {
-        setIsAuthenticated(true);
-        setUser(JSON.parse(userData));
+      console.log('📋 Sesión actual:', session ? 'Existe' : 'No existe')
+      setSession(session)
+      setUser(session?.user ?? null)
+      
+      if (session?.user) {
+        console.log('👤 Usuario encontrado, cargando perfil...')
+        loadUserProfile(session.user.id)
+      } else {
+        console.log('❌ No hay usuario, setLoading(false)')
+        setLoading(false)
       }
-      setLoading(false);
-    };
+    })
 
-    checkAuth();
-  }, []);
+    // Escuchar cambios de autenticación
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!mounted) return
+        
+        console.log('🔐 Auth event:', event, 'Session:', session ? 'Existe' : 'No existe')
+        
+        setSession(session)
+        setUser(session?.user ?? null)
 
-  const login = (userData) => {
-    localStorage.setItem('user', JSON.stringify(userData));
-    localStorage.setItem('isAuthenticated', 'true');
-    setIsAuthenticated(true);
-    setUser(userData);
-  };
+        if (session?.user) {
+          // Si ya tenemos el perfil en caché para este usuario, usarlo
+          if (profileCacheRef.current[session.user.id]) {
+            console.log('✅ Usando perfil desde caché')
+            setProfile(profileCacheRef.current[session.user.id])
+            setLoading(false)
+            return
+          }
+          
+          console.log('👤 Usuario en auth change, cargando perfil...')
+          await loadUserProfile(session.user.id)
+        } else {
+          console.log('❌ No hay usuario en auth change')
+          setProfile(null)
+          setLoading(false)
+        }
+      }
+    )
 
-  const logout = () => {
-    localStorage.removeItem('user');
-    localStorage.removeItem('isAuthenticated');
-    setIsAuthenticated(false);
-    setUser(null);
-  };
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
+  }, [])
 
+  // Cargar perfil del usuario
+  const loadUserProfile = async (userId) => {
+    // Evitar llamadas duplicadas
+    if (loadingProfileRef.current === userId) {
+      console.log('⚠️ Ya se está cargando el perfil para este usuario, omitiendo...')
+      return
+    }
+    
+    // Verificar caché primero
+    if (profileCacheRef.current[userId]) {
+      console.log('✅ Perfil encontrado en caché')
+      setProfile(profileCacheRef.current[userId])
+      setLoading(false)
+      return
+    }
+    
+    console.log('🔄 Cargando perfil para userId:', userId)
+    loadingProfileRef.current = userId
+    
+    // Timeout de seguridad: si no termina en 15 segundos, forzar loading=false
+    const safetyTimeout = setTimeout(() => {
+      console.error('⏱️ TIMEOUT: Forzando setLoading(false) después de 15 segundos')
+      setLoading(false)
+      setProfile(null)
+      loadingProfileRef.current = null
+    }, 15000)
+
+    try {
+      const userProfile = await authService.getUserProfile(userId)
+      clearTimeout(safetyTimeout)
+      console.log('✅ Perfil cargado:', userProfile)
+      
+      // Solo actualizar si el perfil es válido
+      if (userProfile) {
+        // Guardar en caché
+        profileCacheRef.current[userId] = userProfile
+        setProfile(userProfile)
+      } else {
+        console.error('⚠️ Perfil es null, no se actualizará')
+        setProfile(null)
+      }
+    } catch (error) {
+      clearTimeout(safetyTimeout)
+      console.error('❌ Error al cargar perfil:', error)
+      setProfile(null)
+    } finally {
+      clearTimeout(safetyTimeout)
+      loadingProfileRef.current = null
+      console.log('🏁 Finalizando carga, setLoading(false)')
+      setLoading(false)
+    }
+  }
+
+  // Login
+  const login = async (email, password) => {
+    console.log('🔑 Iniciando login...')
+    setLoading(true)
+    try {
+      const result = await authService.login(email, password)
+      console.log('📥 Resultado login:', result.success ? 'Exitoso' : 'Fallido', result)
+      
+      if (result.success) {
+        console.log('✅ Actualizando estado con perfil:', result.data.profile)
+        setUser(result.data.user)
+        setSession(result.data.session)
+        setProfile(result.data.profile)
+      }
+      
+      return result
+    } finally {
+      console.log('🏁 Login finalizado, setLoading(false)')
+      setLoading(false)
+    }
+  }
+
+  // Register
+  const register = async (userData) => {
+    setLoading(true)
+    try {
+      const result = await authService.register(userData)
+      
+      if (result.success) {
+        setUser(result.data.user)
+        setSession(result.data.session)
+        setProfile(result.data.profile)
+      }
+      
+      return result
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Logout
+  const logout = async () => {
+    setLoading(true)
+    try {
+      const result = await authService.logout()
+      
+      if (result.success) {
+        setUser(null)
+        setSession(null)
+        setProfile(null)
+        // Limpiar caché
+        profileCacheRef.current = {}
+      }
+      
+      return result
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Reset password
+  const resetPassword = async (email) => {
+    return await authService.resetPassword(email)
+  }
+
+  // Refresh profile
+  const refreshProfile = async () => {
+    if (user) {
+      // Limpiar caché para forzar recarga
+      delete profileCacheRef.current[user.id]
+      await loadUserProfile(user.id)
+    }
+  }
+
+  // Helpers de rol (compatibilidad con código anterior)
   const hasRole = (role) => {
-    return user?.rol === role;
-  };
+    return profile?.rol === role
+  }
 
   const value = {
-    isAuthenticated,
+    // Estado
     user,
+    session,
+    profile,
     loading,
+    isAuthenticated: !!session,
+    
+    // Métodos
     login,
+    register,
     logout,
-    hasRole
-  };
+    resetPassword,
+    refreshProfile,
+    hasRole,
+    
+    // Helpers
+    isAdmin: profile?.rol === 'admin',
+    isResidente: profile?.rol === 'residente',
+    isEmpleado: profile?.rol === 'empleado'
+  }
 
   return (
     <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
-  );
-}; */
+  )
+}
 
-// src/contexts/AuthContext.jsx
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import supabase from '../services/dbConnection'; // Asegúrate de tener esta importación
-
-// Exportar el contexto para que otros módulos puedan importarlo
-export const AuthContext = createContext();
-
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null); // user contains { id, role, ... }
-  // Track authentication status separately so components like Login can react to changes.
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  // Función para cargar información del empleado desde la BD
-  const loadEmpleadoInfo = async (id_persona) => {
-    try {
-      const { data, error } = await supabase
-        .from('empleado')
-        .select('*')
-        .eq('id_persona', id_persona)
-        .single();
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error cargando información del empleado:', error);
-      return null;
-    }
-  };
-
-  // Función para cargar información de la persona desde la BD
-  const loadPersonaInfo = async (id_persona) => {
-    try {
-      const { data, error } = await supabase
-        .from('persona')
-        .select('*')
-        .eq('id_persona', id_persona)
-        .single();
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error cargando información de la persona:', error);
-      return null;
-    }
-  };
-
-  // Función para enriquecer el usuario con datos de empleado y persona
-  const enrichUserData = async (userData) => {
-    try {
-      let enrichedUser = { ...userData };
-
-      // Cargar información de la persona
-      if (userData.id_persona) {
-        const personaInfo = await loadPersonaInfo(userData.id_persona);
-        if (personaInfo) {
-          enrichedUser.persona = personaInfo;
-        }
-      }
-
-      // Si el usuario es empleado, cargar información del empleado
-      if (userData.rol === 'empleado' && userData.id_persona) {
-        const empleadoInfo = await loadEmpleadoInfo(userData.id_persona);
-        if (empleadoInfo) {
-          enrichedUser.empleado = empleadoInfo;
-        }
-      }
-
-      return enrichedUser;
-    } catch (error) {
-      console.error('Error enriqueciendo datos del usuario:', error);
-      return userData; // Retornar datos originales si hay error
-    }
-  };
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      const authStatus = localStorage.getItem('isAuthenticated');
-      const userData = localStorage.getItem('user');
-      
-      if (authStatus === 'true' && userData) {
-        try {
-          const parsedUser = JSON.parse(userData);
-          
-          // Enriquecer los datos del usuario con información de BD
-          const enrichedUser = await enrichUserData(parsedUser);
-          
-          setUser(enrichedUser);
-          setIsAuthenticated(true);
-          
-          // Actualizar localStorage con los datos enriquecidos
-          localStorage.setItem('user', JSON.stringify(enrichedUser));
-        } catch (error) {
-          console.error('Error procesando datos de usuario:', error);
-          // En caso de error, usar los datos básicos
-          setUser(JSON.parse(userData));
-          setIsAuthenticated(true);
-        }
-      }
-      setLoading(false);
-    };
-
-    checkAuth();
-  }, []);
-
-  const login = async (userData) => {
-    try {
-      // Enriquecer los datos del usuario antes de guardarlos
-      const enrichedUser = await enrichUserData(userData);
-      
-      localStorage.setItem('user', JSON.stringify(enrichedUser));
-      localStorage.setItem('isAuthenticated', 'true');
-      setUser(enrichedUser);
-      setIsAuthenticated(true);
-    } catch (error) {
-      console.error('Error en login:', error);
-      // Si hay error, guardar los datos básicos
-      localStorage.setItem('user', JSON.stringify(userData));
-      localStorage.setItem('isAuthenticated', 'true');
-      setUser(userData);
-      setIsAuthenticated(true);
-    }
-  };
-
-  const logout = () => {
-    localStorage.removeItem('user');
-    localStorage.removeItem('isAuthenticated');
-    setUser(null);
-    setIsAuthenticated(false);
-  };
-
-  // Comprueba si el usuario tiene el rol especificado
-  const hasRole = (role) => {
-    return user?.rol === role;
-  };
-
-  return (
-    <AuthContext.Provider value={{ user, isAuthenticated, login, logout, hasRole, loading }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
-
-export const useAuth = () => {
-  return useContext(AuthContext);
-};
+export { AuthContext }
+export default AuthContext

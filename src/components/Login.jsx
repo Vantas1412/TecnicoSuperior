@@ -1,10 +1,13 @@
 // src/components/Login.jsx
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import usuarioService from '../services/UsuarioService';
 import emailService from '../services/EmailService';
 import personaService from '../services/PersonaService';
 import { useAuth } from '../hooks/useAuth';
+
+// 👉 URL del backend de login facial (loginreco.py)
+const API_URL = import.meta.env.VITE_FACE_API_URL || 'http://localhost:8000/recognize';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -17,8 +20,21 @@ const Login = () => {
   const navigate = useNavigate();
   const { login, isAuthenticated } = useAuth();
 
-  // Si ya está autenticado, redirigir al dashboard correspondiente
-  React.useEffect(() => {
+  // ======= Estados para el modal de reconocimiento facial =======
+  const [showFaceModal, setShowFaceModal] = useState(false);
+  const [faceStatus, setFaceStatus] = useState('En espera…');
+  const [faceError, setFaceError] = useState('');
+  const [faceRt, setFaceRt] = useState(0); // ms
+  const [faceRunning, setFaceRunning] = useState(false);
+
+  // Refs de cámara
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const loopRef = useRef(null);
+
+  // =================== Redirección si ya está autenticado ===================
+  useEffect(() => {
     if (isAuthenticated) {
       redirectByRole();
     }
@@ -43,6 +59,7 @@ const Login = () => {
     }
   };
 
+  // =================== Form clásico ===================
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -53,39 +70,30 @@ const Login = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    
     if (!formData.username || !formData.password || !formData.rol) {
       setError('Por favor, completa todos los campos');
       return;
     }
-
     setLoading(true);
     setError('');
 
     try {
-      // Obtener todos los usuarios y buscar coincidencia
       const result = await usuarioService.obtenerUsuarios();
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Error al conectar con la base de datos');
-      }
+      if (!result.success) throw new Error(result.error || 'Error al conectar con la base de datos');
 
-      // Buscar usuario que coincida con username, password Y rol
       const usuarioEncontrado = result.data.find(
-        usuario => 
-          usuario.username === formData.username && 
+        usuario =>
+          usuario.username === formData.username &&
           usuario.password === formData.password &&
-          usuario.rol === formData.rol // Verificar también el rol
+          usuario.rol === formData.rol
       );
 
       if (usuarioEncontrado) {
-        // Verificar si el usuario está activo
         if (usuarioEncontrado.estado !== 'activo') {
           setError('Tu cuenta está inactiva. Contacta al administrador.');
           return;
         }
 
-        // Login exitoso - preparar datos del usuario
         const userData = {
           id_usuario: usuarioEncontrado.id_usuario,
           username: usuarioEncontrado.username,
@@ -97,8 +105,7 @@ const Login = () => {
           fecha_registro: usuarioEncontrado.fecha_registro,
           id_auth: usuarioEncontrado.id_auth
         };
-        
-        // Usar el hook de autenticación
+
         login(userData);
 
         // 🔐 ENVIAR CORREO DE NOTIFICACIÓN DE INICIO DE SESIÓN
@@ -151,7 +158,6 @@ const Login = () => {
           default:
             navigate('/dashboard');
         }
-        
       } else {
         setError('Usuario, contraseña o rol incorrectos');
       }
@@ -163,15 +169,173 @@ const Login = () => {
     }
   };
 
-  // Función para seleccionar automáticamente un usuario de prueba
+  // =================== Demo helpers ===================
   const selectDemoUser = (username, password, rol) => {
-    setFormData({
-      username,
-      password,
-      rol
-    });
+    setFormData({ username, password, rol });
   };
 
+  // =================== Lógica del modal de reconocimiento facial ===================
+  const openFaceModal = async () => {
+    setShowFaceModal(true);
+    setFaceError('');
+    setFaceStatus('Inicializando cámara…');
+    try {
+      await startCamera();
+      startLoop();
+    } catch (err) {
+      setFaceError('No se pudo iniciar la cámara. Revisa permisos.');
+      console.error(err);
+    }
+  };
+
+  const closeFaceModal = () => {
+    stopLoop();
+    stopCamera();
+    setShowFaceModal(false);
+    setFaceStatus('En espera…');
+    setFaceError('');
+  };
+
+  async function startCamera() {
+    try {
+      if (streamRef.current) stopCamera();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480 },
+        audio: false
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await new Promise(r => (videoRef.current.onloadedmetadata = r));
+        // Asegura tamaño canvas overlay
+        if (canvasRef.current) {
+          canvasRef.current.width = videoRef.current.videoWidth || 640;
+          canvasRef.current.height = videoRef.current.videoHeight || 480;
+        }
+      }
+      setFaceRunning(true);
+      setFaceStatus('Cámara lista');
+    } catch (e) {
+      setFaceRunning(false);
+      throw e;
+    }
+  }
+
+  function stopCamera() {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    setFaceRunning(false);
+  }
+
+  function stopLoop() {
+    if (loopRef.current) {
+      clearInterval(loopRef.current);
+      loopRef.current = null;
+    }
+  }
+
+  function startLoop() {
+    stopLoop();
+    const sendW = 320;
+    const sendH = 240;
+    const intervalMs = 300;
+    const jpegQuality = 0.7;
+
+    loopRef.current = setInterval(async () => {
+      if (!videoRef.current) return;
+      try {
+        // Captura frame reducido
+        const tmp = document.createElement('canvas');
+        tmp.width = sendW; tmp.height = sendH;
+        const tctx = tmp.getContext('2d', { willReadFrequently: true });
+        tctx.drawImage(videoRef.current, 0, 0, sendW, sendH);
+        const dataUrl = tmp.toDataURL('image/jpeg', jpegQuality);
+
+        const t0 = performance.now();
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image_b64: dataUrl })
+        });
+        const json = await res.json();
+        const t1 = performance.now();
+        setFaceRt(Math.round(t1 - t0));
+
+        // Dibuja detecciones (opcional en modal)
+        drawBoxes(json?.results || [], sendW, sendH);
+
+        // Si llegó login, cierra modal y autentica
+        if (json?.login?.token && json?.login?.user) {
+          // Guardar token & usuario (si tu useAuth ya lo hace, puedes omitir los localStorage)
+          localStorage.setItem('token', json.login.token);
+          localStorage.setItem('user', JSON.stringify(json.login.user));
+
+          // Adecúa el objeto para tu hook login (igual que en login clásico)
+          const u = json.login.user;
+          const userData = {
+            id_usuario: u.id_usuario,
+            username: u.username,
+            correo_electronico: u.correo_electronico,
+            rol: u.rol,
+            estado: u.estado,
+            id_persona: u.id_persona,
+            urlfoto: u.urlfoto,
+            fecha_registro: u.fecha_registro,
+            id_auth: u.id_auth
+          };
+
+          login(userData);        // <- tu hook
+          closeFaceModal();       // cierra modal
+          redirectByRole();       // redirige según rol
+        } else {
+          setFaceStatus('Buscando coincidencia…');
+        }
+      } catch (e) {
+        console.error(e);
+        setFaceError('Error comunicando con el servidor.');
+        setFaceStatus('Error de comunicación');
+      }
+    }, intervalMs);
+  }
+
+  function drawBoxes(res, sendW, sendH) {
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    if (!canvas || !video) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const sx = canvas.width / sendW;
+    const sy = canvas.height / sendH;
+    res.forEach(r => {
+      const left = Math.round(r.left * sx);
+      const top = Math.round(r.top * sy);
+      const right = Math.round(r.right * sx);
+      const bottom = Math.round(r.bottom * sy);
+      const ok = r.name !== 'Desconocido';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = ok ? '#22c55e' : '#ef4444';
+      ctx.strokeRect(left, top, right - left, bottom - top);
+      const label = `${r.name} ${(r.confidence * 100).toFixed(0)}%`;
+      ctx.font = '14px ui-sans-serif, system-ui';
+      const textW = ctx.measureText(label).width + 10;
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(left, top - 22, textW, 20);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(label, left + 5, top - 7);
+    });
+  }
+
+  // Limpia cámara si el modal se desmonta (por si acaso)
+  useEffect(() => {
+    if (!showFaceModal) {
+      stopLoop();
+      stopCamera();
+    }
+  }, [showFaceModal]);
+
+  // =================== Render ===================
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-purple-700 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8">
@@ -183,6 +347,19 @@ const Login = () => {
             Sistema de Gestión - Selecciona tu rol
           </p>
         </div>
+
+        {/* ===== Botón de Entrar con reconocimiento facial ===== */}
+        <button
+          type="button"
+          onClick={openFaceModal}
+          className="w-full mb-6 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-4 rounded-lg font-medium transition"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 opacity-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeWidth="1.8" d="M4 8V6a2 2 0 012-2h2M20 8V6a2 2 0 00-2-2h-2M4 16v2a2 2 0 002 2h2M20 16v2a2 2 0 01-2 2h-2" />
+            <path strokeWidth="1.8" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          Entrar con reconocimiento facial
+        </button>
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
@@ -239,6 +416,14 @@ const Login = () => {
               autoComplete="current-password"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200 disabled:bg-gray-100 disabled:cursor-not-allowed"
             />
+            <div className="mt-2 text-right">
+              <a 
+                href="/forgot-password" 
+                className="text-sm text-blue-600 hover:text-blue-700 hover:underline transition duration-200"
+              >
+                ¿Olvidaste tu contraseña?
+              </a>
+            </div>
           </div>
 
           {error && (
@@ -247,8 +432,8 @@ const Login = () => {
             </div>
           )}
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={loading || !formData.username || !formData.password || !formData.rol}
             className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center"
           >
@@ -270,7 +455,7 @@ const Login = () => {
           <h4 className="text-lg font-semibold text-gray-900 mb-4 text-center">
             Usuarios de Prueba
           </h4>
-          
+
           <div className="grid gap-4">
             {/* Administrador */}
             <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-lg border border-purple-200">
@@ -369,7 +554,7 @@ const Login = () => {
                 </span>
                 <button
                   onClick={() => selectDemoUser('aguila.adartse5', 'Empleado2Pass!', 'empleado')}
-                  className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700 transition duration-200"
+                  className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700 transition duración-200"
                 >
                   Usar este
                 </button>
@@ -384,6 +569,71 @@ const Login = () => {
           </div>
         </div>
       </div>
+
+      {/* =================== MODAL RECONOCIMIENTO FACIAL =================== */}
+      {showFaceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={closeFaceModal} />
+          <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <div className="text-lg font-semibold">Entrar con reconocimiento facial</div>
+                <div className="text-sm text-gray-500">Mira a la cámara y espera a que te identifique</div>
+              </div>
+              <button
+                className="text-gray-500 hover:text-gray-700"
+                onClick={closeFaceModal}
+                title="Cerrar"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 grid gap-3">
+              <div className="relative rounded-xl overflow-hidden bg-gray-900">
+                <span className="absolute top-3 left-3 z-10 text-xs px-2 py-1 rounded-md bg-black/50 text-white">
+                  {faceStatus} · {faceRt} ms
+                </span>
+                <video ref={videoRef} autoPlay playsInline className="w-full h-auto block" />
+                <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+              </div>
+
+              {faceError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                  {faceError}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  onClick={closeFaceModal}
+                  className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                {faceRunning ? (
+                  <button
+                    onClick={() => { stopLoop(); setFaceRunning(false); setFaceStatus('Pausado'); }}
+                    className="px-4 py-2 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-white"
+                  >
+                    Pausar
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => { setFaceError(''); setFaceStatus('Reanudando…'); startLoop(); setFaceRunning(true); }}
+                    className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white"
+                  >
+                    Reanudar
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* =================== FIN MODAL =================== */}
     </div>
   );
 };

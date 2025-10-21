@@ -1,28 +1,25 @@
 // src/App.jsx
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
-import LoginPage from './pages/auth/LoginPage';
+import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
 import ResidenteDashboard from './components/ResidenteDashboard';
 import EmpleadoDashboard from './components/EmpleadoDashboard';
 import Unauthorized from './components/Unauthorized';
 import ProtectedRoute from './components/ProtectedRoute';
-import ForgotPassword from './components/ForgotPassword';
-import ResetPassword from './components/ResetPassword';
 import { AuthProvider } from './contexts/AuthContext';
 import { useAuth } from './hooks/useAuth';
 import './App.css';
 
 // Componente para redirección del dashboard
 function DashboardRedirect() {
-  const { profile } = useAuth();
+  const { user } = useAuth();
   
-  if (!profile) {
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
   
-  switch (profile.rol) {
+  switch (user.rol) {
     case 'admin':
       return <Navigate to="/admin/dashboard" replace />;
     case 'residente':
@@ -43,12 +40,8 @@ function App() {
             {/* Ruta principal */}
             <Route path="/" element={<Navigate to="/login" replace />} />
             
-            {/* Login - Nuevo componente mejorado */}
-            <Route path="/login" element={<LoginPage />} />
-            
-            {/* Recuperación de contraseña */}
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
+            {/* Login */}
+            <Route path="/login" element={<Login />} />
             
             {/* Rutas protegidas por rol */}
             <Route 
@@ -90,28 +83,6 @@ function App() {
             {/* Catch all route */}
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
-          
-          {/* Toast notifications */}
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              duration: 4000,
-              style: {
-                background: '#363636',
-                color: '#fff',
-              },
-              success: {
-                style: {
-                  background: '#059669',
-                },
-              },
-              error: {
-                style: {
-                  background: '#DC2626',
-                },
-              },
-            }}
-          />
         </div>
       </Router>
     </AuthProvider>
