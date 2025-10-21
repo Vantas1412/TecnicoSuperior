@@ -523,6 +523,42 @@ export default function LoginPage() {
                   </div>
                   <span className="text-xs text-indigo-600 font-medium">Usar</span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => fillTestUser('maquizeq@fcpn.edu.bo', 'Temp123!')}
+                  className="w-full flex items-center justify-between bg-white/70 hover:bg-white p-3 rounded-lg transition-colors text-left"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">🏠 Residente</p>
+                    <p className="text-xs text-gray-600">maquizeq@fcpn.edu.bo</p>
+                  </div>
+                  <span className="text-xs text-indigo-600 font-medium">Usar</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => fillTestUser('oquispev2@fcpn.edu.bo', 'Temp123!')}
+                  className="w-full flex items-center justify-between bg-white/70 hover:bg-white p-3 rounded-lg transition-colors text-left"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">🏠 Residente</p>
+                    <p className="text-xs text-gray-600">oquispev2@fcpn.edu.bo</p>
+                  </div>
+                  <span className="text-xs text-indigo-600 font-medium">Usar</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => fillTestUser('aguila.adartse5@gmail.com', 'Temp123!')}
+                  className="w-full flex items-center justify-between bg-white/70 hover:bg-white p-3 rounded-lg transition-colors text-left"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">👨‍💼 Empleado</p>
+                    <p className="text-xs text-gray-600">aguila.adartse5@gmail.com</p>
+                  </div>
+                  <span className="text-xs text-indigo-600 font-medium">Usar</span>
+                </button>
               </div>
             </div>
           )}

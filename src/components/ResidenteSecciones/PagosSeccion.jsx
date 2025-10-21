@@ -2,28 +2,50 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import PersonaService from '../../services/PersonaService';
+import PasarelaPagos from '../shared/PasarelaPagos';
+import ComprobantePago from '../shared/ComprobantePago';
+import toast from 'react-hot-toast';
 
 const PagosSeccion = () => {
-  const { user } = useAuth();
+  console.log('[PagosSeccion] Componente renderizado');
+  const { user, profile } = useAuth();
+  console.log('[PagosSeccion] user:', user, 'profile:', profile);
   const [pagos, setPagos] = useState([]);
   const [deudasPendientes, setDeudasPendientes] = useState([]);
   const [deudasPagadas, setDeudasPagadas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Estados para modales
+  const [showPasarela, setShowPasarela] = useState(false);
+  const [showComprobante, setShowComprobante] = useState(false);
+  const [deudaSeleccionada, setDeudaSeleccionada] = useState(null);
+  const [pagoComprobante, setPagoComprobante] = useState(null);
+
+  // Obtener id_persona del profile o del user
+  const idPersona = profile?.persona?.id_persona || profile?.id_persona || user?.id_persona;
+
   useEffect(() => {
+    console.log('[PagosSeccion] useEffect ejecutado, idPersona:', idPersona, 'profile:', profile);
     cargarDatosPagos();
-  }, [user?.id_persona]);
+  }, [idPersona]);
 
   const cargarDatosPagos = async () => {
-    if (!user?.id_persona) return;
+    console.log('[PagosSeccion] cargarDatosPagos iniciado, idPersona:', idPersona);
+    if (!idPersona) {
+      console.log('[PagosSeccion] No hay id_persona, abortando carga');
+      setLoading(false);
+      return;
+    }
     
     setLoading(true);
     setError('');
 
     try {
       // Cargar pagos realizados usando la función de PostgreSQL
-      const resultadoPagos = await PersonaService.obtenerPagosPorPagador(user.id_persona);
+      console.log('[PagosSeccion] Cargando pagos...');
+      const resultadoPagos = await PersonaService.obtenerPagosPorPagador(idPersona);
+      console.log('[PagosSeccion] Resultado pagos:', resultadoPagos);
       
       if (resultadoPagos.success) {
         setPagos(resultadoPagos.data || []);
@@ -32,7 +54,9 @@ const PagosSeccion = () => {
       }
 
       // Cargar deudas pendientes usando la función de PostgreSQL
-      const resultadoDeudasPendientes = await PersonaService.obtenerDeudasPorEstado(user.id_persona, 'Pendiente');
+      console.log('[PagosSeccion] Cargando deudas pendientes...');
+      const resultadoDeudasPendientes = await PersonaService.obtenerDeudasPorEstado(idPersona, 'Pendiente');
+      console.log('[PagosSeccion] Resultado deudas pendientes:', resultadoDeudasPendientes);
       
       if (resultadoDeudasPendientes.success) {
         setDeudasPendientes(resultadoDeudasPendientes.data || []);
@@ -41,7 +65,9 @@ const PagosSeccion = () => {
       }
 
       // Cargar deudas pagadas usando la función de PostgreSQL
-      const resultadoDeudasPagadas = await PersonaService.obtenerDeudasPorEstado(user.id_persona, 'Pagado');
+      console.log('[PagosSeccion] Cargando deudas pagadas...');
+      const resultadoDeudasPagadas = await PersonaService.obtenerDeudasPorEstado(idPersona, 'Pagado');
+      console.log('[PagosSeccion] Resultado deudas pagadas:', resultadoDeudasPagadas);
       
       if (resultadoDeudasPagadas.success) {
         setDeudasPagadas(resultadoDeudasPagadas.data || []);
@@ -53,6 +79,11 @@ const PagosSeccion = () => {
       console.error('Error general al cargar datos de pagos:', error);
       setError('Error al cargar la información de pagos');
     } finally {
+      console.log('[PagosSeccion] Carga finalizada. Estados:', { 
+        pagos: pagos.length, 
+        deudasPendientes: deudasPendientes.length,
+        deudasPagadas: deudasPagadas.length 
+      });
       setLoading(false);
     }
   };
@@ -63,20 +94,52 @@ const PagosSeccion = () => {
   const balanceTotal = totalPagado + totalPendiente;
 
   const handlePagar = async (deuda) => {
-    try {
-      // Aquí iría la lógica para procesar el pago
-      // Por ahora simulamos el pago
-      alert(`Procesando pago de $${deuda.monto} por concepto: ${deuda.concepto}`);
-      
-      // Recargar datos después del pago simulado
-      await cargarDatosPagos();
-    } catch (error) {
-      console.error('Error al procesar pago:', error);
-      setError('Error al procesar el pago');
-    }
+    console.log('handlePagar llamado con:', deuda);
+    // Abrir modal de pasarela de pagos
+    setDeudaSeleccionada(deuda);
+    setShowPasarela(true);
+    console.log('Estados después de setear:', { deudaSeleccionada: deuda, showPasarela: true });
+  };
+
+  const handlePagoExitoso = async (resultado) => {
+    console.log('[PagosSeccion] Pago exitoso:', resultado);
+    
+    // TODO: Tu amigo - Registrar el pago en la base de datos
+    // await PagoService.registrarPagoLibelula(...)
+    // await DeudaService.marcarComoPagada(...)
+    
+    toast.success('¡Pago realizado con éxito!');
+    setShowPasarela(false);
+    
+    // Preparar datos para el comprobante
+    setPagoComprobante({
+      id_transaccion: resultado.transaccionId,
+      fecha: resultado.fecha || new Date().toISOString(),
+      concepto: resultado.concepto,
+      monto: resultado.monto,
+      metodo: resultado.metodo === 'QR' ? 'Código QR' : 'Tarjeta de Crédito/Débito',
+      pagador: profile?.persona?.nombre || profile?.username || 'Usuario',
+      ci: profile?.ci || 'N/A',
+      email: profile?.email || user?.email
+    });
+    
+    // Recargar datos de deudas
+    await cargarDatosPagos();
+    
+    // Mostrar comprobante
+    setShowComprobante(true);
+    setDeudaSeleccionada(null);
+  };
+
+  const handlePagoError = (error) => {
+    console.error('[PagosSeccion] Error en pago:', error);
+    toast.error('Error al procesar el pago: ' + (error.message || 'Intenta nuevamente'));
+    setShowPasarela(false);
+    setDeudaSeleccionada(null);
   };
 
   if (loading) {
+    console.log('[PagosSeccion] Mostrando spinner de carga...');
     return (
       <div className="p-6">
         <div className="flex justify-center items-center h-64">
@@ -85,6 +148,8 @@ const PagosSeccion = () => {
       </div>
     );
   }
+
+  console.log('[PagosSeccion] Renderizando contenido principal');
 
   return (
     <div className="p-6">
@@ -275,6 +340,34 @@ const PagosSeccion = () => {
           <p className="text-gray-500 text-center py-4">No hay historial de deudas pagadas</p>
         )}
       </div>
+
+      {/* Modal de Pasarela de Pagos */}
+      {console.log('Render condicional:', { showPasarela, deudaSeleccionada })}
+      {showPasarela && deudaSeleccionada && (
+        <PasarelaPagos
+          isOpen={showPasarela}
+          deuda={deudaSeleccionada}
+          usuario={profile || user}
+          onSuccess={handlePagoExitoso}
+          onError={handlePagoError}
+          onClose={() => {
+            setShowPasarela(false);
+            setDeudaSeleccionada(null);
+          }}
+        />
+      )}
+
+      {/* Modal de Comprobante */}
+      {showComprobante && pagoComprobante && (
+        <ComprobantePago
+          isOpen={showComprobante}
+          pago={pagoComprobante}
+          onClose={() => {
+            setShowComprobante(false);
+            setPagoComprobante(null);
+          }}
+        />
+      )}
     </div>
   );
 };

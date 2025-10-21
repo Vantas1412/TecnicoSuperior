@@ -5,9 +5,12 @@ import AreaComunService from '../../services/AreaComunService';
 import ReservaService from '../../services/ReservaService';
 import PagoService from '../../services/PagoService';
 import RealizaService from '../../services/RealizaService';
+import PasarelaPagos from '../shared/PasarelaPagos';
+import ComprobantePago from '../shared/ComprobantePago';
+import toast from 'react-hot-toast';
 
 const ReservasSeccion = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [areasComunes, setAreasComunes] = useState([]);
   const [reservas, setReservas] = useState([]);
   const [horariosOcupados, setHorariosOcupados] = useState([]);
@@ -20,6 +23,11 @@ const ReservasSeccion = () => {
     fecha: '',
     horariosSeleccionados: []
   });
+
+  // Estados para pasarela de pagos
+  const [showPasarela, setShowPasarela] = useState(false);
+  const [showComprobante, setShowComprobante] = useState(false);
+  const [pagoComprobante, setPagoComprobante] = useState(null);
 
   const [mostrarFormPago, setMostrarFormPago] = useState(false);
   const [reservaPendiente, setReservaPendiente] = useState(null);
@@ -202,7 +210,7 @@ const ReservasSeccion = () => {
       return;
     }
 
-    // Preparar reserva pendiente y mostrar formulario de pago
+    // Preparar reserva pendiente y abrir pasarela de pagos
     const monto = calcularMontoTotal();
     const area = areasComunes.find(a => a.id_area === nuevaReserva.id_area);
     
@@ -212,14 +220,105 @@ const ReservasSeccion = () => {
       monto
     });
     
-    setDatosPago({
-      ...datosPago,
-      monto,
-      concepto: `Reserva de ${area?.nombre} - ${nuevaReserva.horariosSeleccionados.length} horario(s)`
-    });
+    // Crear objeto deuda para la pasarela
+    const deudaReserva = {
+      concepto: `Reserva: ${area?.nombre}`,
+      descripcion: `${nuevaReserva.horariosSeleccionados.length} horario(s) - ${nuevaReserva.fecha}`,
+      monto: monto,
+      fecha: nuevaReserva.fecha
+    };
     
-    setMostrarFormPago(true);
+    setDatosPago(deudaReserva);
+    setShowPasarela(true);
     setError('');
+  };
+
+  const handlePagoExitoso = async (resultado) => {
+    console.log('[ReservasSeccion] Pago exitoso:', resultado);
+    
+    try {
+      // TODO: Tu amigo debe implementar el guardado de la reserva y el pago
+      // 1. Crear el pago en la BD
+      // 2. Crear la reserva con referencia al pago
+      // 3. Crear registros en la tabla REALIZA
+      
+      const timestamp = Date.now();
+      const idPago = `PAG${timestamp}`;
+      
+      // MOCK: Simular guardado de reserva
+      const nuevasReservas = reservaPendiente.horariosSeleccionados.map((horarioObj, index) => ({
+        id_reserva: `RES${timestamp}${index}`,
+        id_registro_area: reservaPendiente.id_area,
+        fecha_reservacion: reservaPendiente.fecha,
+        hora_inicio: horarioObj.hora_inicio,
+        hora_fin: horarioObj.hora_fin,
+        estado: 'Confirmada',
+        id_persona: profile?.persona?.id_persona || user?.id_persona,
+        id_pago: idPago
+      }));
+
+      toast.success('¡Reserva realizada con éxito!');
+      setShowPasarela(false);
+      
+      // Preparar comprobante
+      setPagoComprobante({
+        id_transaccion: resultado.transaccionId,
+        fecha: resultado.fecha || new Date().toISOString(),
+        concepto: resultado.concepto,
+        monto: resultado.monto,
+        metodo: resultado.metodo === 'QR' ? 'Código QR' : 'Tarjeta de Crédito/Débito',
+        pagador: profile?.persona?.nombre || profile?.username || 'Usuario',
+        ci: profile?.ci || 'N/A',
+        email: profile?.email || user?.email
+      });
+      
+      // Recargar datos
+      await cargarDatos();
+      
+      // Mostrar comprobante
+      setShowComprobante(true);
+      setReservaPendiente(null);
+      
+      // Limpiar formulario
+      setNuevaReserva({
+        id_area: '',
+        fecha: '',
+        horariosSeleccionados: []
+      });
+      
+    } catch (error) {
+      console.error('[ReservasSeccion] Error al procesar reserva:', error);
+      toast.error('Error al procesar la reserva');
+    }
+  };
+
+  const handlePagoError = (error) => {
+    console.error('[ReservasSeccion] Error en pago:', error);
+    toast.error('Error al procesar el pago: ' + (error.message || 'Intenta nuevamente'));
+    setShowPasarela(false);
+    setReservaPendiente(null);
+  };
+
+  // Mantener el método anterior para compatibilidad (opcional)
+  const handleConfirmarPagoAntiguo = async () => {
+    if (!reservaPendiente) return;
+
+    setLoading(true);
+    setError('');
+
+    try {
+      // ... código anterior de confirmación ...
+      toast.success('Reserva creada exitosamente');
+      setMostrarFormPago(false);
+      setReservaPendiente(null);
+      setNuevaReserva({ id_area: '', fecha: '', horariosSeleccionados: [] });
+      await cargarDatos();
+    } catch (error) {
+      console.error('Error:', error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleConfirmarPago = async () => {
@@ -600,6 +699,30 @@ const ReservasSeccion = () => {
           </div>
         )}
       </div>
+
+      {/* Modal de Pasarela de Pagos */}
+      {showPasarela && datosPago && (
+        <PasarelaPagos
+          isOpen={showPasarela}
+          deuda={datosPago}
+          usuario={profile || user}
+          onSuccess={handlePagoExitoso}
+          onError={handlePagoError}
+          onClose={() => {
+            setShowPasarela(false);
+            setReservaPendiente(null);
+          }}
+        />
+      )}
+
+      {/* Modal de Comprobante */}
+      {showComprobante && pagoComprobante && (
+        <ComprobantePago
+          isOpen={showComprobante}
+          pago={pagoComprobante}
+          onClose={() => setShowComprobante(false)}
+        />
+      )}
     </div>
   );
 };
