@@ -45,6 +45,16 @@ VITE_SUPABASE_ANON_KEY=tu_clave_anon
 RESEND_API_KEY=re_TU_API_KEY_AQUI
 EMAIL_FROM=onboarding@resend.dev
 VITE_EMAIL_API_URL=http://localhost:3001/api/send-email
+
+# Libélula (pasarela de pagos)
+# URL sandbox por defecto: https://sandbox.libelula.bo/api/v1
+LIBELULA_API_URL=https://sandbox.libelula.bo/api/v1
+LIBELULA_APP_KEY=11bb10ce-68ba-4af1-8eb7-4e6624fed729
+LIBELULA_SANDBOX=true
+LIBELULA_MOCK=true  # Opcional: activa mocks si el sandbox no responde o no resuelve DNS
+
+# Frontend -> Backend base URL
+VITE_API_BASE_URL=http://localhost:3001
 ```
 
 ## 🎯 Iniciar el Sistema
@@ -89,6 +99,7 @@ TecnicoSuperior/
 ├── email-server/          # Servidor de correos con Resend
 │   ├── server.js          # API backend
 │   └── package.json       # Dependencias
+│   └── (también expone /api/libelula/* para pagos)
 ├── public/                # Archivos estáticos
 ├── sql/                   # Scripts SQL
 └── .env                   # Variables de entorno
@@ -100,6 +111,27 @@ TecnicoSuperior/
 - ✅ Roles de usuario (Admin, Empleado, Residente)
 - ✅ Rutas protegidas
 - ✅ API Keys en backend (nunca en frontend)
+## 💳 Pasarela de Pagos Libélula
+
+Este proyecto integra una pasarela de pagos (QR y Tarjeta) usando un backend proxy en `email-server` que se comunica con la API de Libélula. El frontend llama al backend usando `VITE_API_BASE_URL`.
+
+Rutas expuestas por el backend:
+
+- POST `/api/libelula/payment/new` → Crea una orden de pago
+- GET `/api/libelula/payment/status/:ordenId` → Consulta estado
+- POST `/api/libelula/payment/process-card` → Procesa tarjeta
+- GET `/api/libelula/payment/qr/:ordenId` → Obtiene QR (si aplica)
+- POST `/api/libelula/webhook` → Recepción de callbacks
+
+Para usarlo:
+1) configura las variables de entorno en `.env` como se indica arriba (APP_KEY y API_URL)
+2) inicia el servidor `email-server` y el frontend
+3) desde la UI, selecciona el método (QR o Tarjeta) y sigue el flujo.
+
+Notas:
+- El APP KEY de Libélula debe residir sólo en el backend.
+- El webhook puede necesitar verificación de firma (pendiente de manual oficial).
+
 - ✅ CORS configurado
 - ✅ Validación de datos
 
