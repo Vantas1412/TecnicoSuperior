@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import PersonaService from '../../services/PersonaService';
+import PagoService from '../../services/PagoService';
+import DeudaService from '../../services/DeudaService';
 import PasarelaPagos from '../shared/PasarelaPagos';
 import ComprobantePago from '../shared/ComprobantePago';
 import toast from 'react-hot-toast';
@@ -103,32 +105,45 @@ const PagosSeccion = () => {
 
   const handlePagoExitoso = async (resultado) => {
     console.log('[PagosSeccion] Pago exitoso:', resultado);
-    
-    // TODO: Tu amigo - Registrar el pago en la base de datos
-    // await PagoService.registrarPagoLibelula(...)
-    // await DeudaService.marcarComoPagada(...)
-    
-    toast.success('¡Pago realizado con éxito!');
-    setShowPasarela(false);
-    
-    // Preparar datos para el comprobante
-    setPagoComprobante({
-      id_transaccion: resultado.transaccionId,
-      fecha: resultado.fecha || new Date().toISOString(),
-      concepto: resultado.concepto,
-      monto: resultado.monto,
-      metodo: resultado.metodo === 'QR' ? 'Código QR' : 'Tarjeta de Crédito/Débito',
-      pagador: profile?.persona?.nombre || profile?.username || 'Usuario',
-      ci: profile?.ci || 'N/A',
-      email: profile?.email || user?.email
-    });
-    
-    // Recargar datos de deudas
-    await cargarDatosPagos();
-    
-    // Mostrar comprobante
-    setShowComprobante(true);
-    setDeudaSeleccionada(null);
+    try {
+      // 1. Registrar pago en BD
+      const registroPago = await PagoService.registrarPagoLibelula(
+        deudaSeleccionada,
+        { orden_id: resultado.ordenId, metodo: resultado.metodo },
+        { estado: resultado.estado, transaccion_id: resultado.transaccionId, fecha: resultado.fecha, monto: resultado.monto },
+        profile || user
+      );
+      if (!registroPago.success) {
+        throw new Error(registroPago.error || 'Error al registrar pago');
+      }
+
+      // 2. Vincular pago a deuda y marcar como pagada
+      await PagoService.vincularPagoADeuda(deudaSeleccionada.id_deuda, registroPago.data.id_pago);
+      await DeudaService.marcarComoPagada(deudaSeleccionada.id_deuda, registroPago.data.id_pago);
+
+      toast.success('¡Pago registrado con éxito!');
+      setShowPasarela(false);
+
+      // Preparar datos para el comprobante
+      setPagoComprobante({
+        id_transaccion: resultado.transaccionId || resultado.ordenId,
+        fecha: resultado.fecha || new Date().toISOString(),
+        concepto: resultado.concepto,
+        monto: resultado.monto,
+        metodo: resultado.metodo === 'QR' ? 'Código QR' : 'Tarjeta de Crédito/Débito',
+        pagador: profile?.persona?.nombre || profile?.username || 'Usuario',
+        ci: profile?.ci || 'N/A',
+        email: profile?.email || user?.email
+      });
+
+      // Recargar datos
+      await cargarDatosPagos();
+      setShowComprobante(true);
+      setDeudaSeleccionada(null);
+    } catch (error) {
+      console.error('Error registrando pago:', error);
+      toast.error('Pago procesado pero hubo error al registrar');
+    }
   };
 
   const handlePagoError = (error) => {

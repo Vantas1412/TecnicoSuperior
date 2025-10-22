@@ -74,6 +74,53 @@ class DeudaService {
       return { success: false, error: error.message };
     }
   }
+
+  // ================== LIBÉLULA INTEGRACIÓN ==================
+  async marcarComoPagada(idDeuda, idPago) {
+    try {
+      const { data, error } = await this.supabase
+        .from('deuda')
+        .update({ estado: 'Pagado', id_pago: idPago, fecha_pago: new Date() })
+        .eq('id_deuda', idDeuda)
+        .select()
+        .single();
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error al marcar deuda como pagada:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async verificarEstadoDeuda(idDeuda) {
+    try {
+      const { data, error } = await this.supabase
+        .from('deuda')
+        .select('id_deuda, estado, id_pago, fecha_pago')
+        .eq('id_deuda', idDeuda)
+        .single();
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error al verificar estado de deuda:', error);
+      return { success: false, error: error.message, data: null };
+    }
+  }
+
+  async obtenerDeudasConPagos(idPersona) {
+    try {
+      const { data, error } = await this.supabase
+        .from('deuda')
+        .select('*, pago(*)')
+        .eq('id_persona', idPersona)
+        .order('id_deuda');
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error al obtener deudas con pagos:', error);
+      return { success: false, error: error.message, data: [] };
+    }
+  }
 }
 
 const deudaService = new DeudaService();
