@@ -20,7 +20,7 @@ if (process.env.RESEND_API_KEY) {
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000'], // Agregar tus dominios
+  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'], // Agregar tus dominios
   credentials: true
 }));
 app.use(express.json());

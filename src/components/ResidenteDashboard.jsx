@@ -7,9 +7,11 @@ import { useNavigate } from 'react-router-dom';
 import {
   DashboardSeccion,
   MantenimientoSeccion,
-  ReservasSeccion,
   PagosSeccion,
 } from './ResidenteSecciones';
+
+// Importar módulo de reservas modernizado (v2)
+import ReservasSeccionV2 from './ResidenteSecciones/ReservasSeccion_v2';
 
 // Importar sección de comunicación para residente
 import ComunicacionSeccion from './ResidenteSecciones/ComunicacionSeccion';
@@ -39,7 +41,7 @@ const ResidenteDashboard = () => {
       case 'mantenimiento':
         return <MantenimientoSeccion />;
       case 'reservas':
-        return <ReservasSeccion />;
+        return <ReservasSeccionV2 />;
       case 'pagos':
         return <PagosSeccion />;
       case 'comunicacion':

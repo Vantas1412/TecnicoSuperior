@@ -15,6 +15,7 @@ import {
   ComunicacionSeccion,
   EntradasEmpleadoSeccion
 } from './EmpleadoSecciones';
+import EntregaAreasSeccion from './EmpleadoSecciones/EntregaAreasSeccion';
 
 const EmpleadoDashboard = () => {
   const { profile, logout } = useAuth();
@@ -35,6 +36,7 @@ const EmpleadoDashboard = () => {
     { id: 'informe', label: 'Informe de Trabajo', icon: '📋' },
     { id: 'evidencia', label: 'Mandar Evidencia', icon: '📎' },
     { id: 'comunicacion', label: 'Comunicación', icon: '💬' },
+    { id: 'entrega-areas', label: 'Entrega de Áreas', icon: '🔑' },
   ];
 
   // Añadimos "Entradas" si el usuario es de tipo Seguridad
@@ -54,6 +56,8 @@ const EmpleadoDashboard = () => {
         return <MandarEvidencia />;
       case 'comunicacion':
         return <ComunicacionSeccion />;
+      case 'entrega-areas':
+        return <EntregaAreasSeccion />;
       case 'entradas':
         // Sólo renderizar EntradasEmpleadoSeccion si el usuario es de tipo Seguridad
         return <EntradasEmpleadoSeccion />;
