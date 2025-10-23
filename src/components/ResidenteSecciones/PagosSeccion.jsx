@@ -357,7 +357,12 @@ const PagosSeccion = () => {
       </div>
 
       {/* Modal de Pasarela de Pagos */}
-      {console.log('Render condicional:', { showPasarela, deudaSeleccionada })}
+      {console.log('[PagosSeccion] Render condicional:', { showPasarela, deudaSeleccionada })}
+      {console.log('[PagosSeccion] profile completo:', profile)}
+      {console.log('[PagosSeccion] user completo:', user)}
+      {console.log('[PagosSeccion] Pasando usuario a PasarelaPagos:', profile || user)}
+      {console.log('[PagosSeccion] profile.persona:', profile?.persona)}
+      {console.log('[PagosSeccion] Campos de profile:', profile ? Object.keys(profile) : 'null')}
       {showPasarela && deudaSeleccionada && (
         <PasarelaPagos
           isOpen={showPasarela}

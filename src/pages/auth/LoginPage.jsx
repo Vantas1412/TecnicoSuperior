@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { Mail, Lock, AlertCircle, Building2, Shield, Users, ArrowRight, Camera } from 'lucide-react'
+import { useLoginAttempts } from '../../hooks/useLoginAttempts'
+import { Mail, Lock, AlertCircle, Building2, Shield, Users, ArrowRight, Camera, Clock } from 'lucide-react'
 import ReCaptcha from '../../shared/components/ReCaptcha'
 
 // URL del backend de reconocimiento facial
@@ -10,6 +11,7 @@ const FACE_API_URL = import.meta.env.VITE_FACE_API_URL || 'http://localhost:8000
 export default function LoginPage() {
   const navigate = useNavigate()
   const { login, loading: authLoading } = useAuth()
+  const { isBlocked, remainingTime, attemptsLeft, recordFailedAttempt, clearAttempts, formatTime } = useLoginAttempts()
 
   const [formData, setFormData] = useState({
     email: '',
@@ -64,6 +66,13 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
+
+    // Verificar bloqueo
+    if (isBlocked) {
+      setError(`Cuenta bloqueada temporalmente. Intenta en ${formatTime(remainingTime)}`)
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -85,6 +94,9 @@ export default function LoginPage() {
       const result = await login(email, password)
 
       if (result.success) {
+        // Login exitoso - limpiar intentos
+        clearAttempts()
+        
         // Redirigir según el rol del usuario
         const userRole = result.data.profile?.rol
         
@@ -102,7 +114,14 @@ export default function LoginPage() {
             navigate('/dashboard')
         }
       } else {
-        setError(result.error || 'Error al iniciar sesión')
+        // Login fallido - registrar intento
+        const attemptResult = recordFailedAttempt()
+        
+        if (attemptResult.isBlocked) {
+          setError('Demasiados intentos fallidos. Cuenta bloqueada por 15 minutos.')
+        } else {
+          setError(`${result.error || 'Credenciales incorrectas'}. Te quedan ${attemptResult.attemptsLeft} intentos.`)
+        }
       }
     } catch (err) {
       console.error('❌ Error en login:', err)
@@ -296,7 +315,7 @@ export default function LoginPage() {
           
           {/* Título */}
           <h1 className="text-5xl font-bold mb-4 text-center">
-            Edificio Multifuncional
+            VERIDIAN
           </h1>
           <p className="text-xl text-white/90 text-center mb-12 max-w-md">
             Sistema de Gestión Integral para tu Edificio
@@ -430,6 +449,48 @@ export default function LoginPage() {
               </div>
             )}
 
+            {/* Bloqueo Temporal Alert */}
+            {isBlocked && (
+              <div className="rounded-xl bg-red-50 border-2 border-red-200 p-4">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <Clock className="h-6 w-6 text-red-600" />
+                  </div>
+                  <div className="ml-3 flex-1">
+                    <h3 className="text-sm font-bold text-red-800">
+                      Cuenta Bloqueada Temporalmente
+                    </h3>
+                    <div className="mt-2 text-sm text-red-700">
+                      <p className="mb-2">
+                        Has excedido el número máximo de intentos de inicio de sesión.
+                      </p>
+                      <div className="flex items-center gap-2 bg-red-100 rounded-lg px-3 py-2">
+                        <Clock className="h-5 w-5 text-red-600 animate-pulse" />
+                        <span className="font-mono text-lg font-bold text-red-900">
+                          {formatTime(remainingTime)}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs">
+                        Por favor, espera antes de intentar nuevamente.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Intentos restantes (solo si no está bloqueado y quedan menos de 3) */}
+            {!isBlocked && attemptsLeft < 3 && attemptsLeft > 0 && (
+              <div className="rounded-xl bg-amber-50 border-2 border-amber-200 p-3">
+                <div className="flex items-center">
+                  <AlertCircle className="h-5 w-5 text-amber-600 mr-2" />
+                  <p className="text-sm font-medium text-amber-800">
+                    Te {attemptsLeft === 1 ? 'queda' : 'quedan'} <span className="font-bold">{attemptsLeft}</span> {attemptsLeft === 1 ? 'intento' : 'intentos'}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* reCAPTCHA */}
             <ReCaptcha
               onVerify={handleRecaptchaVerify}
@@ -441,7 +502,7 @@ export default function LoginPage() {
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={loading || authLoading}
+              disabled={loading || authLoading || isBlocked}
               className="group relative w-full flex justify-center items-center py-4 px-4 border border-transparent text-base font-semibold rounded-xl text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
             >
               {loading || authLoading ? (
