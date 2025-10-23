@@ -27,6 +27,21 @@ class UsuarioService {
     }
   }
 
+  async obtenerUsuarioPorPersona(id_persona) {
+    try {
+      const { data, error } = await this.supabase
+        .from('usuario')
+        .select('*, persona(*)')
+        .eq('id_persona', id_persona)
+        .single();
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error al obtener usuario por persona:', error);
+      return { success: false, error: error.message, data: null };
+    }
+  }
+
   async crearUsuario(usuario) {
     try {
       const { data, error } = await this.supabase.from('usuario').insert([usuario]);

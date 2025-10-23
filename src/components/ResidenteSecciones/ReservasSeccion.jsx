@@ -260,16 +260,16 @@ const ReservasSeccion = () => {
       toast.success('¡Reserva realizada con éxito!');
       setShowPasarela(false);
       
-      // Preparar comprobante
+      // Preparar comprobante con datos de Supabase
       setPagoComprobante({
         id_transaccion: resultado.transaccionId,
         fecha: resultado.fecha || new Date().toISOString(),
         concepto: resultado.concepto,
         monto: resultado.monto,
         metodo: resultado.metodo === 'QR' ? 'Código QR' : 'Tarjeta de Crédito/Débito',
-        pagador: profile?.persona?.nombre || profile?.username || 'Usuario',
-        ci: profile?.ci || 'N/A',
-        email: profile?.email || user?.email
+        pagador: profile?.persona?.nombre || profile?.username || user?.username || 'Usuario',
+        ci: profile?.persona?.ci || profile?.persona?.nro_ci || 'N/A',
+        email: profile?.persona?.email || profile?.persona?.correo || profile?.email || user?.email || 'N/A'
       });
       
       // Recargar datos

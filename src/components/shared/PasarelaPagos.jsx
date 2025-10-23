@@ -1,21 +1,22 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, CreditCard, QrCode, Check, AlertCircle, Loader2, ArrowLeft } from 'lucide-react'
 import LibelulaService from '../../services/LibelulaService'
+import UsuarioService from '../../services/UsuarioService'
 import toast from 'react-hot-toast'
 
 export default function PasarelaPagos({ isOpen, deuda, usuario, onSuccess, onError, onClose }) {
   const [paso, setPaso] = useState(1)
   const [metodoPago, setMetodoPago] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [loadingDatos, setLoadingDatos] = useState(true)
   const [ordenId, setOrdenId] = useState(null)
   const [error, setError] = useState(null)
   const [resultado, setResultado] = useState(null)
+  const [personaCompleta, setPersonaCompleta] = useState(null)
   
   const [formData, setFormData] = useState({
-    nombre: usuario?.persona?.nombre || usuario?.username || '',
-    ci: '',
-    email: usuario?.email || '',
-    telefono: ''
+    nombre: '',
+    email: ''
   })
 
   const [datosTarjeta, setDatosTarjeta] = useState({
@@ -30,6 +31,119 @@ export default function PasarelaPagos({ isOpen, deuda, usuario, onSuccess, onErr
   const [tiempoRestante, setTiempoRestante] = useState(300) // 5 minutos
   const pollingRef = useRef(null)
   const timerRef = useRef(null)
+
+  // Cargar datos completos del usuario desde Supabase
+  useEffect(() => {
+    const cargarDatosUsuario = async () => {
+      if (!usuario) {
+        setLoadingDatos(false)
+        return
+      }
+
+      console.log('📋 [PasarelaPagos] Usuario recibido:', usuario)
+      console.log('📋 [PasarelaPagos] usuario.persona:', usuario.persona)
+      console.log('📋 [PasarelaPagos] usuario.id_persona:', usuario.id_persona)
+      console.log('📋 [PasarelaPagos] usuario.email:', usuario.email)
+      console.log('📋 [PasarelaPagos] usuario.ci:', usuario.ci)
+      console.log('📋 [PasarelaPagos] TODOS los campos de usuario:', Object.keys(usuario))
+
+      setLoadingDatos(true)
+
+      try {
+        // Obtener id_persona
+        const idPersona = usuario?.persona?.id_persona || usuario?.id_persona
+        
+        if (idPersona) {
+          console.log('📋 [PasarelaPagos] Cargando datos completos desde Supabase para id_persona:', idPersona)
+          
+          // Cargar datos completos desde Supabase (tabla usuario + persona)
+          const resultado = await UsuarioService.obtenerUsuarioPorPersona(idPersona)
+          
+          if (resultado.success && resultado.data) {
+            console.log('✅ [PasarelaPagos] Datos de usuario+persona obtenidos de Supabase:', resultado.data)
+            console.log('📋 [PasarelaPagos] Campos disponibles en resultado.data:', Object.keys(resultado.data))
+            console.log('📋 [PasarelaPagos] resultado.data.persona:', resultado.data.persona)
+            if (resultado.data.persona) {
+              console.log('📋 [PasarelaPagos] Campos en persona:', Object.keys(resultado.data.persona))
+            }
+            setPersonaCompleta(resultado.data)
+            
+            // Construir nombre completo
+            const nombreCompleto = [
+              resultado.data.persona?.nombre, 
+              resultado.data.persona?.apellido
+            ].filter(Boolean).join(' ') || resultado.data.username || 'Usuario';
+                      
+            const email = resultado.data.email || 
+                         resultado.data.correo || 
+                         resultado.data.correo_electronico ||
+                         resultado.data.mail ||
+                         null;
+            
+            console.log('📋 [PasarelaPagos] Valores extraídos:', {
+              nombre: nombreCompleto,
+              email: email
+            })
+            
+            // Actualizar formData con datos de Supabase
+            setFormData({
+              nombre: nombreCompleto,
+              email: email || 'No registrado en BD'
+            })
+          } else {
+            console.warn('⚠️ [PasarelaPagos] No se pudieron obtener datos de Supabase, usando datos del usuario')
+            
+            // Construir nombre completo del objeto usuario
+            const nombreCompleto = usuario?.persona?.nombre && usuario?.persona?.apellido
+              ? `${usuario.persona.nombre} ${usuario.persona.apellido}`
+              : usuario?.persona?.nombre || usuario?.username || 'Usuario';
+            
+            const email = usuario?.email || usuario?.persona?.email || usuario?.persona?.correo || 'No registrado';
+            
+            // Usar datos del objeto usuario si falla la consulta
+            setFormData({
+              nombre: nombreCompleto,
+              email: email
+            })
+          }
+        } else {
+          console.warn('⚠️ [PasarelaPagos] No se encontró id_persona, usando datos disponibles')
+          
+          // Construir nombre completo
+          const nombreCompleto = usuario?.persona?.nombre && usuario?.persona?.apellido
+            ? `${usuario.persona.nombre} ${usuario.persona.apellido}`
+            : usuario?.persona?.nombre || usuario?.username || 'Usuario';
+          
+          const email = usuario?.email || usuario?.persona?.email || usuario?.persona?.correo || 'No registrado';
+          
+          // Usar datos disponibles del usuario
+          setFormData({
+            nombre: nombreCompleto,
+            email: email
+          })
+        }
+      } catch (error) {
+        console.error('❌ [PasarelaPagos] Error al cargar datos del usuario:', error)
+        
+        // Construir nombre completo
+        const nombreCompleto = usuario?.persona?.nombre && usuario?.persona?.apellido
+          ? `${usuario.persona.nombre} ${usuario.persona.apellido}`
+          : usuario?.persona?.nombre || usuario?.username || 'Usuario';
+        
+        const email = usuario?.email || usuario?.persona?.email || usuario?.persona?.correo || 'No registrado';
+        
+        // En caso de error, usar datos del objeto usuario
+        setFormData({
+          nombre: nombreCompleto,
+          email: email
+        })
+      } finally {
+        setLoadingDatos(false)
+      }
+    }
+
+    cargarDatosUsuario()
+  }, [usuario])
 
   // Limpiar intervalos al desmontar
   useEffect(() => {
@@ -65,26 +179,19 @@ export default function PasarelaPagos({ isOpen, deuda, usuario, onSuccess, onErr
   }
 
   const validarEmail = (email) => /\S+@\S+\.\S+/.test(email)
-  const validarCI = (ci) => /^\d{6,}$/.test(ci)
-  const validarTelefono = (tel) => /^\d{7,}$/.test(tel)
 
   const handleContinuarPaso1 = () => {
-    if (!formData.nombre.trim()) {
-      toast.error('Por favor ingresa tu nombre')
+    // Validación simplificada ya que los datos vienen de Supabase
+    if (!formData.nombre || !formData.nombre.trim() || formData.nombre === 'Usuario') {
+      toast.error('No se pudieron cargar los datos del usuario. Por favor recarga la página.')
       return
     }
-    if (!validarCI(formData.ci)) {
-      toast.error('CI debe tener al menos 6 dígitos')
+    if (!formData.email || formData.email === 'No registrado en BD' || !validarEmail(formData.email)) {
+      toast.error('⚠️ Tu perfil no tiene Email registrado o es inválido. Contacta al administrador.')
       return
     }
-    if (!validarEmail(formData.email)) {
-      toast.error('Email inválido')
-      return
-    }
-    if (!validarTelefono(formData.telefono)) {
-      toast.error('Teléfono debe tener al menos 7 dígitos')
-      return
-    }
+    
+    console.log('✅ Datos validados, continuando al paso 2')
     setPaso(2)
   }
 
@@ -94,16 +201,20 @@ export default function PasarelaPagos({ isOpen, deuda, usuario, onSuccess, onErr
     setError(null)
 
     try {
+      // NOTA: QR es SIMULACRO - LibelulaService usa datos MOCK
+      // La tarjeta será reemplazada por Stripe (tu amigo)
       const resultado = await LibelulaService.iniciarPago(deuda, formData, metodo)
       
       if (resultado.success) {
         setOrdenId(resultado.data.orden_id)
         
         if (metodo === 'QR') {
+          // QR SIMULACRO - genera QR falso para demostración
           setQrData(resultado.data.qr_data)
           setPaso(3)
           iniciarPollingQR(resultado.data.orden_id)
         } else {
+          // TARJETA - Tu amigo implementará Stripe aquí
           setPaso(3)
         }
       } else {
@@ -120,6 +231,7 @@ export default function PasarelaPagos({ isOpen, deuda, usuario, onSuccess, onErr
   }
 
   const iniciarPollingQR = (ordenIdParam) => {
+    // QR SIMULACRO - polling falso que aprueba automáticamente después de 10 segundos
     const ordenIdActual = ordenIdParam || ordenId
     
     pollingRef.current = setInterval(async () => {
@@ -145,6 +257,13 @@ export default function PasarelaPagos({ isOpen, deuda, usuario, onSuccess, onErr
   }
 
   const handlePagarConTarjeta = async () => {
+    // TODO: TU AMIGO - Implementar integración con Stripe
+    // 1. Reemplazar LibelulaService por StripeService
+    // 2. Usar Stripe Elements para captura segura de tarjeta
+    // 3. Crear PaymentIntent en el backend
+    // 4. Confirmar pago con stripe.confirmCardPayment()
+    // 5. Manejar 3D Secure si es necesario
+    
     // Validar datos de tarjeta
     if (!datosTarjeta.numero || datosTarjeta.numero.length < 13) {
       toast.error('Número de tarjeta inválido')
@@ -167,6 +286,7 @@ export default function PasarelaPagos({ isOpen, deuda, usuario, onSuccess, onErr
     setError(null)
 
     try {
+      // MOCK temporal - Tu amigo debe reemplazar esto con Stripe
       const resultado = await LibelulaService.procesarPagoTarjeta(ordenId, datosTarjeta)
       
       if (resultado.success) {
@@ -282,60 +402,121 @@ export default function PasarelaPagos({ isOpen, deuda, usuario, onSuccess, onErr
 
           {/* PASO 1: Datos del pagador */}
           {paso === 1 && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Nombre completo *
-                </label>
-                <input
-                  type="text"
-                  value={formData.nombre}
-                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  placeholder="Juan Pérez"
-                />
-              </div>
+            <div className="space-y-5">
+              {loadingDatos ? (
+                <div className="flex flex-col items-center justify-center py-16">
+                  <div className="relative">
+                    <Loader2 className="w-16 h-16 animate-spin text-indigo-600" />
+                    <div className="absolute inset-0 w-16 h-16 border-4 border-indigo-200 rounded-full"></div>
+                  </div>
+                  <p className="text-gray-600 mt-4 font-medium">Cargando tus datos...</p>
+                  <p className="text-gray-400 text-sm mt-1">Conectando con Supabase</p>
+                </div>
+              ) : (
+                <>
+                  {/* Título de sección */}
+                  <div className="pb-4 border-b border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-800">Información del pagador</h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Verifica que tus datos sean correctos antes de continuar
+                    </p>
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Carnet de Identidad *
-                </label>
-                <input
-                  type="text"
-                  value={formData.ci}
-                  onChange={(e) => setFormData({ ...formData, ci: e.target.value.replace(/\D/g, '') })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  placeholder="1234567"
-                  maxLength="15"
-                />
-              </div>
+                  {/* Mensaje informativo mejorado */}
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-500 rounded-r-lg p-4 flex items-start gap-3 shadow-sm">
+                    <div className="bg-blue-500 rounded-full p-1 flex-shrink-0">
+                      <AlertCircle className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-blue-900 mb-1">
+                        Datos cargados desde Supabase
+                      </p>
+                      <p className="text-xs text-blue-700">
+                        Esta información proviene directamente de tu perfil registrado en la base de datos.
+                        Si necesitas actualizarla, contacta con el administrador.
+                      </p>
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email *
-                </label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  placeholder="correo@ejemplo.com"
-                />
-              </div>
+                  {/* Grid de campos */}
+                  <div className="space-y-4">
+                    {/* Nombre completo */}
+                    <div>
+                      <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                        <span className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-bold">1</span>
+                        Nombre completo
+                        <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={formData.nombre}
+                          disabled
+                          readOnly
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-800 font-medium cursor-not-allowed focus:outline-none"
+                          placeholder="Cargando..."
+                        />
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <Check className="w-5 h-5 text-green-500" />
+                        </div>
+                      </div>
+                    </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Teléfono *
-                </label>
-                <input
-                  type="tel"
-                  value={formData.telefono}
-                  onChange={(e) => setFormData({ ...formData, telefono: e.target.value.replace(/\D/g, '') })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  placeholder="70123456"
-                  maxLength="15"
-                />
-              </div>
+                    {/* Email */}
+                    <div>
+                      <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                        <span className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-bold">2</span>
+                        Correo electrónico
+                        <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="email"
+                          value={formData.email}
+                          disabled
+                          readOnly
+                          className={`w-full px-4 py-3 border-2 rounded-lg font-medium cursor-not-allowed focus:outline-none ${
+                            formData.email === 'No registrado en BD' 
+                              ? 'border-amber-300 bg-amber-50 text-amber-700' 
+                              : 'border-gray-200 bg-gray-50 text-gray-800'
+                          }`}
+                          placeholder="Cargando..."
+                        />
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          {formData.email === 'No registrado en BD' ? (
+                            <AlertCircle className="w-5 h-5 text-amber-500" />
+                          ) : (
+                            <Check className="w-5 h-5 text-green-500" />
+                          )}
+                        </div>
+                      </div>
+                      {formData.email === 'No registrado en BD' && (
+                        <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" />
+                          Este campo no existe en la base de datos - Contacta al administrador
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Nota de seguridad */}
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mt-4">
+                    <div className="flex items-start gap-2">
+                      <div className="bg-gray-200 rounded-full p-1 flex-shrink-0">
+                        <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-medium text-gray-700">Seguridad de datos</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Tus datos personales están protegidos y solo se utilizan para procesar este pago de manera segura.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -723,15 +904,17 @@ export default function PasarelaPagos({ isOpen, deuda, usuario, onSuccess, onErr
               <>
                 <button
                   onClick={onClose}
-                  className="flex-1 px-6 py-3 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  disabled={loadingDatos}
+                  className="flex-1 px-6 py-3 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleContinuarPaso1}
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all duration-200"
+                  disabled={loadingDatos}
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Continuar
+                  {loadingDatos ? 'Cargando...' : 'Continuar'}
                 </button>
               </>
             )}

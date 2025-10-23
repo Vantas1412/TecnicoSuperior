@@ -111,16 +111,16 @@ const PagosSeccion = () => {
     toast.success('¡Pago realizado con éxito!');
     setShowPasarela(false);
     
-    // Preparar datos para el comprobante
+    // Preparar datos para el comprobante con datos de Supabase
     setPagoComprobante({
       id_transaccion: resultado.transaccionId,
       fecha: resultado.fecha || new Date().toISOString(),
       concepto: resultado.concepto,
       monto: resultado.monto,
       metodo: resultado.metodo === 'QR' ? 'Código QR' : 'Tarjeta de Crédito/Débito',
-      pagador: profile?.persona?.nombre || profile?.username || 'Usuario',
-      ci: profile?.ci || 'N/A',
-      email: profile?.email || user?.email
+      pagador: profile?.persona?.nombre || profile?.username || user?.username || 'Usuario',
+      ci: profile?.persona?.ci || profile?.persona?.nro_ci || 'N/A',
+      email: profile?.persona?.email || profile?.persona?.correo || profile?.email || user?.email || 'N/A'
     });
     
     // Recargar datos de deudas
@@ -342,7 +342,12 @@ const PagosSeccion = () => {
       </div>
 
       {/* Modal de Pasarela de Pagos */}
-      {console.log('Render condicional:', { showPasarela, deudaSeleccionada })}
+      {console.log('[PagosSeccion] Render condicional:', { showPasarela, deudaSeleccionada })}
+      {console.log('[PagosSeccion] profile completo:', profile)}
+      {console.log('[PagosSeccion] user completo:', user)}
+      {console.log('[PagosSeccion] Pasando usuario a PasarelaPagos:', profile || user)}
+      {console.log('[PagosSeccion] profile.persona:', profile?.persona)}
+      {console.log('[PagosSeccion] Campos de profile:', profile ? Object.keys(profile) : 'null')}
       {showPasarela && deudaSeleccionada && (
         <PasarelaPagos
           isOpen={showPasarela}
