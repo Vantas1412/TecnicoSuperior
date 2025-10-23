@@ -27,6 +27,24 @@ const PagosSeccion = () => {
   // Obtener id_persona del profile o del user
   const idPersona = profile?.persona?.id_persona || profile?.id_persona || user?.id_persona;
 
+  // Detectar retorno de Stripe
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentStatus = urlParams.get('payment');
+    const deudaId = urlParams.get('deuda');
+    
+    if (paymentStatus === 'success' && deudaId) {
+      toast.success('¡Pago procesado con éxito por Stripe!');
+      // Limpiar parámetros de URL
+      window.history.replaceState({}, '', window.location.pathname);
+      // Recargar datos para reflejar el pago
+      cargarDatosPagos();
+    } else if (paymentStatus === 'cancelled') {
+      toast.error('Pago cancelado. Puedes intentarlo nuevamente.');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
   useEffect(() => {
     console.log('[PagosSeccion] useEffect ejecutado, idPersona:', idPersona, 'profile:', profile);
     cargarDatosPagos();

@@ -46,23 +46,72 @@ app.post('/create-checkout-session', async (req, res) => {
       horarioLabels,
       fecha,
       idPersona,
+      concepto,
+      descripcion,
+      idDeuda,
+      metadata,
       successUrl,
       cancelUrl,
     } = req.body;
 
-    console.log('🔍 Validación de campos:');
-    console.log('  amount:', amount);
-    console.log('  areaName:', areaName);
-    console.log('  areaId:', areaId);
-    console.log('  horarios:', horarios);
-    console.log('  fecha:', fecha);
-    console.log('  idPersona:', idPersona);
+    // Determinar si es pago de deuda o reserva de área
+    const esDeuda = !!idDeuda;
 
-    if (!amount || !areaName || !areaId || !horarios?.length || !fecha || !idPersona) {
-      return res.status(400).json({ success: false, error: 'Faltan datos obligatorios para crear la sesión de Stripe.' });
+    console.log('🔍 Tipo de pago:', esDeuda ? 'DEUDA' : 'RESERVA');
+
+    if (!amount || !idPersona) {
+      return res.status(400).json({ success: false, error: 'amount e idPersona son obligatorios.' });
     }
 
     const currency = process.env.STRIPE_CURRENCY || 'usd';
+    let sessionMetadata = {};
+    let productName = '';
+    let productDescription = '';
+
+    if (esDeuda) {
+      // Pago de deuda
+      console.log('  Concepto:', concepto);
+      console.log('  Descripción:', descripcion);
+      console.log('  ID Deuda:', idDeuda);
+
+      if (!concepto || !idDeuda) {
+        return res.status(400).json({ success: false, error: 'Faltan datos obligatorios para pago de deuda (concepto, idDeuda).' });
+      }
+
+      productName = concepto;
+      productDescription = descripcion || `Pago de ${concepto}`;
+      
+      sessionMetadata = {
+        tipo: 'deuda',
+        id_persona: String(idPersona),
+        id_deuda: String(idDeuda),
+        concepto: concepto,
+        ...metadata
+      };
+    } else {
+      // Reserva de área común
+      console.log('  Area:', areaName);
+      console.log('  Fecha:', fecha);
+      console.log('  Horarios:', horarios);
+
+      if (!areaName || !areaId || !horarios?.length || !fecha) {
+        return res.status(400).json({ success: false, error: 'Faltan datos obligatorios para reserva (areaName, areaId, horarios, fecha).' });
+      }
+
+      productName = `Reserva de ${areaName}`;
+      productDescription = `Reserva para ${horarios.length} horario(s) el ${fecha}`;
+      
+      sessionMetadata = {
+        tipo: 'reserva',
+        id_persona: String(idPersona),
+        id_area: String(areaId),
+        fecha: String(fecha),
+        horarios: JSON.stringify(horarios),
+        horario_labels: JSON.stringify(horarioLabels),
+        area_nombre: areaName,
+        concepto: `Reserva de ${areaName}`,
+      };
+    }
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -73,22 +122,14 @@ app.post('/create-checkout-session', async (req, res) => {
             currency,
             unit_amount: Math.round(Number(amount) * 100),
             product_data: {
-              name: `Reserva de ${areaName}`,
-              description: `Reserva para ${horarios.length} horario(s) el ${fecha}`,
+              name: productName,
+              description: productDescription,
             },
           },
           quantity: 1,
         },
       ],
-      metadata: {
-        id_persona: String(idPersona),
-        id_area: String(areaId),
-        fecha: String(fecha),
-        horarios: JSON.stringify(horarios),
-        horario_labels: JSON.stringify(horarioLabels),
-        area_nombre: areaName,
-        concepto: `Reserva de ${areaName}`,
-      },
+      metadata: sessionMetadata,
       success_url: `${successUrl}${successUrl.includes('?') ? '&' : '?'}session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: cancelUrl,
     });

@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, CreditCard, QrCode, Check, AlertCircle, Loader2, ArrowLeft } from 'lucide-react'
-import LibelulaService from '../../services/LibelulaService'
 import UsuarioService from '../../services/UsuarioService'
+import StripeService from '../../services/StripeService'
 import toast from 'react-hot-toast'
+import QRCode from 'qrcode'
 
 export default function PasarelaPagos({ isOpen, deuda, usuario, onSuccess, onError, onClose }) {
   const [paso, setPaso] = useState(1)
@@ -201,30 +202,52 @@ export default function PasarelaPagos({ isOpen, deuda, usuario, onSuccess, onErr
     setError(null)
 
     try {
-      // NOTA: QR es SIMULACRO - LibelulaService usa datos MOCK
-      // La tarjeta será reemplazada por Stripe (tu amigo)
-      const resultado = await LibelulaService.iniciarPago(deuda, formData, metodo)
-      
-      if (resultado.success) {
-        setOrdenId(resultado.data.orden_id)
+      if (metodo === 'QR') {
+        // QR SIMULADO - Solo para demostración
+        const mockOrdenId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+        setOrdenId(mockOrdenId)
         
-        if (metodo === 'QR') {
-          // QR SIMULACRO - genera QR falso para demostración
-          setQrData(resultado.data.qr_data)
-          setPaso(3)
-          iniciarPollingQR(resultado.data.orden_id)
-        } else {
-          // TARJETA - Tu amigo implementará Stripe aquí
-          setPaso(3)
-        }
+        // Generar QR code simulado con datos del pago
+        const qrDataString = JSON.stringify({
+          orden_id: mockOrdenId,
+          monto: deuda.monto,
+          concepto: deuda.concepto,
+          fecha: new Date().toISOString()
+        })
+        
+        const qrImageUrl = await QRCode.toDataURL(qrDataString, {
+          width: 300,
+          margin: 2,
+          color: {
+            dark: '#4F46E5',
+            light: '#FFFFFF'
+          }
+        })
+        
+        setQrData(qrImageUrl)
+        setPaso(3)
+        
+        // Simular aprobación automática después de 10 segundos
+        setTimeout(() => {
+          const mockResultado = {
+            transaccion_id: `TXN-${Date.now()}`,
+            estado: 'APPROVED',
+            fecha: new Date().toISOString(),
+            monto: deuda.monto
+          }
+          setResultado(mockResultado)
+          setPaso(4)
+          toast.success('¡Pago QR simulado aprobado!')
+        }, 10000)
+        
       } else {
-        setError(resultado.error || 'Error al iniciar el pago')
-        toast.error('Error al procesar la solicitud')
+        // TARJETA - Redirigir a Stripe Checkout
+        setPaso(3)
       }
     } catch (err) {
       console.error('Error al iniciar pago:', err)
-      setError('Error de conexión. Por favor intenta nuevamente.')
-      toast.error('Error de conexión')
+      setError('Error al procesar la solicitud. Por favor intenta nuevamente.')
+      toast.error('Error al iniciar el pago')
     } finally {
       setLoading(false)
     }
@@ -257,51 +280,54 @@ export default function PasarelaPagos({ isOpen, deuda, usuario, onSuccess, onErr
   }
 
   const handlePagarConTarjeta = async () => {
-    // TODO: TU AMIGO - Implementar integración con Stripe
-    // 1. Reemplazar LibelulaService por StripeService
-    // 2. Usar Stripe Elements para captura segura de tarjeta
-    // 3. Crear PaymentIntent en el backend
-    // 4. Confirmar pago con stripe.confirmCardPayment()
-    // 5. Manejar 3D Secure si es necesario
-    
-    // Validar datos de tarjeta
-    if (!datosTarjeta.numero || datosTarjeta.numero.length < 13) {
-      toast.error('Número de tarjeta inválido')
-      return
-    }
-    if (!datosTarjeta.titular.trim()) {
-      toast.error('Ingresa el nombre del titular')
-      return
-    }
-    if (!datosTarjeta.mes || !datosTarjeta.anio) {
-      toast.error('Ingresa la fecha de vencimiento')
-      return
-    }
-    if (!datosTarjeta.cvv || datosTarjeta.cvv.length < 3) {
-      toast.error('CVV inválido')
-      return
-    }
-
     setLoading(true)
     setError(null)
 
     try {
-      // MOCK temporal - Tu amigo debe reemplazar esto con Stripe
-      const resultado = await LibelulaService.procesarPagoTarjeta(ordenId, datosTarjeta)
+      // Identificar la deuda - puede venir como id_deuda o deuda_id
+      const deudaId = deuda.id_deuda || deuda.deuda_id || `DEUDA-${Date.now()}`
       
-      if (resultado.success) {
-        setResultado(resultado.data)
-        setPaso(4)
-        toast.success('¡Pago aprobado!')
-      } else {
-        setError(resultado.error || 'Pago rechazado')
-        toast.error(resultado.error || 'Pago rechazado')
+      console.log('🔍 Deuda completa recibida:', deuda)
+      console.log('🔍 ID de deuda identificado:', deudaId)
+      
+      // Usar Stripe para procesar el pago
+      const payload = {
+        amount: deuda.monto,
+        concepto: deuda.concepto,
+        descripcion: deuda.descripcion || '',
+        idDeuda: deudaId,
+        idPersona: usuario?.persona?.id_persona || usuario?.id_persona,
+        metadata: {
+          tipo: 'deuda',
+          id_deuda: deudaId,
+          concepto: deuda.concepto
+        },
+        successUrl: `${window.location.origin}/residente/pagos?payment=success&deuda=${deudaId}`,
+        cancelUrl: `${window.location.origin}/residente/pagos?payment=cancelled`
       }
+
+      console.log('📤 Enviando pago a Stripe:', payload)
+
+      const result = await StripeService.createCheckoutSession(payload)
+
+      if (!result.success) {
+        throw new Error(result.error || 'Error al crear la sesión de pago')
+      }
+
+      console.log('✅ Sesión de Stripe creada:', result.data)
+
+      // Redirigir a Stripe Checkout
+      if (result.data.url) {
+        toast.success('Redirigiendo a Stripe...')
+        window.location.href = result.data.url
+      } else {
+        throw new Error('No se recibió la URL de checkout de Stripe')
+      }
+
     } catch (err) {
-      console.error('Error procesando tarjeta:', err)
-      setError('Error al procesar el pago')
-      toast.error('Error al procesar el pago')
-    } finally {
+      console.error('Error procesando tarjeta con Stripe:', err)
+      setError(err.message || 'Error al procesar el pago con Stripe')
+      toast.error(err.message || 'Error al procesar el pago')
       setLoading(false)
     }
   }
@@ -691,138 +717,71 @@ export default function PasarelaPagos({ isOpen, deuda, usuario, onSuccess, onErr
               {metodoPago === 'TARJETA' && (
                 <div className="space-y-6">
                   <div className="text-center">
-                    <h3 className="font-bold text-2xl text-gray-800 mb-2">Información de tu tarjeta</h3>
-                    <p className="text-gray-600">Ingresa los datos de forma segura</p>
+                    <div className="flex justify-center mb-6">
+                      <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-full flex items-center justify-center">
+                        <CreditCard className="w-10 h-10 text-purple-600" />
+                      </div>
+                    </div>
+                    <h3 className="font-bold text-2xl text-gray-800 mb-2">Pago con Tarjeta</h3>
+                    <p className="text-gray-600">Procesado de forma segura por Stripe</p>
                   </div>
 
-                  {/* Credit Card Visual */}
-                  <div className="relative h-56 perspective-1000">
-                    <div className="relative w-full h-full transform-style-preserve-3d">
-                      <div className="absolute w-full h-full bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-600 rounded-2xl shadow-2xl p-6 text-white">
-                        <div className="flex justify-between items-start mb-8">
-                          <div className="w-12 h-10 bg-gradient-to-br from-yellow-200 to-yellow-400 rounded-md opacity-80"></div>
-                          <CreditCard className="w-10 h-10 opacity-50" />
+                  {/* Resumen visual mejorado */}
+                  <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-200 rounded-2xl p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-gray-700 font-medium">Monto total:</span>
+                      <span className="text-3xl font-bold text-purple-600">Bs {deuda.monto?.toFixed(2)}</span>
+                    </div>
+                    <div className="border-t border-purple-200 pt-4 space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Concepto:</span>
+                        <span className="font-medium text-gray-800">{deuda.concepto}</span>
+                      </div>
+                      {deuda.descripcion && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Descripción:</span>
+                          <span className="font-medium text-gray-800">{deuda.descripcion}</span>
                         </div>
-                        <div className="space-y-4">
-                          <div className="font-mono text-2xl tracking-wider">
-                            {datosTarjeta.numero || '•••• •••• •••• ••••'}
-                          </div>
-                          <div className="flex justify-between items-end">
-                            <div>
-                              <p className="text-xs opacity-70 mb-1">Titular</p>
-                              <p className="font-medium">{datosTarjeta.titular || 'NOMBRE APELLIDO'}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-xs opacity-70 mb-1">Expira</p>
-                              <p className="font-medium">{datosTarjeta.mes || 'MM'}/{datosTarjeta.anio || 'AA'}</p>
-                            </div>
-                          </div>
-                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Métodos aceptados */}
+                  <div className="bg-white border-2 border-gray-200 rounded-xl p-5">
+                    <p className="text-sm font-semibold text-gray-700 mb-3">Métodos de pago aceptados:</p>
+                    <div className="flex flex-wrap gap-3 justify-center">
+                      <div className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-lg">
+                        <CreditCard className="w-5 h-5 text-blue-600" />
+                        <span className="text-sm font-medium text-gray-700">Visa</span>
+                      </div>
+                      <div className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-lg">
+                        <CreditCard className="w-5 h-5 text-orange-600" />
+                        <span className="text-sm font-medium text-gray-700">Mastercard</span>
+                      </div>
+                      <div className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-lg">
+                        <CreditCard className="w-5 h-5 text-blue-800" />
+                        <span className="text-sm font-medium text-gray-700">American Express</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Form Fields */}
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Número de tarjeta *
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={datosTarjeta.numero}
-                          onChange={(e) => {
-                            const value = e.target.value.replace(/\D/g, '').slice(0, 16);
-                            setDatosTarjeta({ ...datosTarjeta, numero: value });
-                          }}
-                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all font-mono text-lg"
-                          placeholder="1234 5678 9012 3456"
-                          maxLength="19"
-                        />
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                          <CreditCard className="w-6 h-6 text-gray-400" />
-                        </div>
-                      </div>
-                      <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" />
-                        <span>DEMO: Termina en número par para aprobar</span>
+                  {/* Seguridad */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+                    <div className="bg-blue-500 rounded-full p-2 flex-shrink-0">
+                      <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="text-sm text-blue-900">
+                      <p className="font-semibold mb-1">Pago 100% Seguro</p>
+                      <p className="text-xs text-blue-700">
+                        Tu información financiera está protegida con encriptación de nivel bancario. 
+                        Stripe procesa millones de pagos diariamente de forma segura.
                       </p>
                     </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Nombre del titular *
-                      </label>
-                      <input
-                        type="text"
-                        value={datosTarjeta.titular}
-                        onChange={(e) => setDatosTarjeta({ ...datosTarjeta, titular: e.target.value.toUpperCase() })}
-                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all uppercase"
-                        placeholder="COMO APARECE EN LA TARJETA"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Mes *
-                        </label>
-                        <input
-                          type="text"
-                          value={datosTarjeta.mes}
-                          onChange={(e) => {
-                            const value = e.target.value.replace(/\D/g, '').slice(0, 2);
-                            if (value === '' || (parseInt(value) >= 1 && parseInt(value) <= 12)) {
-                              setDatosTarjeta({ ...datosTarjeta, mes: value });
-                            }
-                          }}
-                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-center font-mono"
-                          placeholder="MM"
-                          maxLength="2"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Año *
-                        </label>
-                        <input
-                          type="text"
-                          value={datosTarjeta.anio}
-                          onChange={(e) => setDatosTarjeta({ ...datosTarjeta, anio: e.target.value.replace(/\D/g, '').slice(0, 2) })}
-                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-center font-mono"
-                          placeholder="AA"
-                          maxLength="2"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          CVV *
-                        </label>
-                        <input
-                          type="password"
-                          value={datosTarjeta.cvv}
-                          onChange={(e) => setDatosTarjeta({ ...datosTarjeta, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })}
-                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-center font-mono"
-                          placeholder="•••"
-                          maxLength="4"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
-                      <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                      </svg>
-                      <div className="text-sm text-blue-800">
-                        <p className="font-semibold mb-1">Tu información está protegida</p>
-                        <p className="text-xs">Utilizamos encriptación de nivel bancario para proteger tus datos.</p>
-                      </div>
-                    </div>
                   </div>
 
+                  {/* Botón de pago con Stripe */}
                   <button
                     onClick={handlePagarConTarjeta}
                     disabled={loading}
@@ -831,15 +790,19 @@ export default function PasarelaPagos({ isOpen, deuda, usuario, onSuccess, onErr
                     {loading ? (
                       <>
                         <Loader2 className="w-6 h-6 animate-spin" />
-                        <span>Procesando tu pago...</span>
+                        <span>Conectando con Stripe...</span>
                       </>
                     ) : (
                       <>
                         <CreditCard className="w-6 h-6" />
-                        <span>Pagar Bs {deuda.monto?.toFixed(2)}</span>
+                        <span>Pagar Bs {deuda.monto?.toFixed(2)} con Stripe</span>
                       </>
                     )}
                   </button>
+
+                  <p className="text-xs text-center text-gray-500">
+                    Serás redirigido a la página segura de Stripe para completar tu pago
+                  </p>
                 </div>
               )}
 

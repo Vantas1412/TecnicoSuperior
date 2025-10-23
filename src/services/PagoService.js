@@ -89,7 +89,6 @@ class PagoService {
         id_beneficiario: 1, // TODO: parametrizar o tomar del contexto
         id_transaccion_externa: ordenLibelula?.orden_id || estadoPago?.transaccion_id || null,
         estado: estadoPago?.estado || 'Pendiente',
-        datos_respuesta: estadoPago ? JSON.stringify(estadoPago) : null,
         fecha: new Date()
       };
 
