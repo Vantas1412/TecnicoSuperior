@@ -17,6 +17,7 @@ import {
   EntradasSeccion,
   FinanzasSeccion, // 👈 NUEVO
 } from './AdminSecciones';
+import AreasReservasSeccion from './AdminSecciones/AreasReservasSeccion';
 
 // Nota: ComunicacionSeccion se importa ahora junto con el resto de secciones desde
 // ./AdminSecciones/index.js.  También agregamos CuentasSeccion y EntradasSeccion
@@ -38,6 +39,7 @@ const AdminDashboard = () => {
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: '📊' },
   { id: 'finanzas', label: 'Finanzas', icon: '💵' }, // 👈 NUEVO
+  { id: 'areas-comunes', label: 'Áreas Comunes', icon: '🏛️' }, // 👈 NUEVO
   { id: 'residentes', label: 'Residentes', icon: '👨‍👩‍👧‍👦' },
   { id: 'personal', label: 'Personal', icon: '👥' },
   { id: 'servicios', label: 'Servicios', icon: '🔧' },
@@ -52,6 +54,7 @@ const menuItems = [
     switch (activeSection) {
       case 'dashboard':   return <DashboardSeccion />;
       case 'finanzas':    return <FinanzasSeccion />; // 👈 NUEVO
+      case 'areas-comunes': return <AreasReservasSeccion />; // 👈 NUEVO
       case 'residentes':  return <ResidentesSeccion />;
       case 'servicios':   return <ServiciosSeccion />;
       case 'notificaciones': return <NotificacionesSeccion />;

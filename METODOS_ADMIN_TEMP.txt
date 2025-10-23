@@ -1,0 +1,36 @@
+// MÉTODOS PARA AGREGAR AL FINAL DE LA CLASE AreaComunService
+// (antes del cierre de la clase "}")
+
+  // ==================== MÉTODOS DE ADMINISTRADOR ====================
+  
+  // Obtener TODAS las áreas (incluyendo inactivas)
+  async obtenerTodasAreas() {
+    try {
+      const { data, error } = await this.supabase
+        .from('area_comun')
+        .select('*')
+        .order('nombre');
+
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error al obtener todas las áreas:', error);
+      return { success: false, error: error.message, data: [] };
+    }
+  }
+
+  // Activar/Desactivar área
+  async activarDesactivarArea(id_area, activo) {
+    try {
+      const { data, error } = await this.supabase
+        .from('area_comun')
+        .update({ activo })
+        .eq('id_area', id_area);
+
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error al activar/desactivar área:', error);
+      return { success: false, error: error.message };
+    }
+  }
