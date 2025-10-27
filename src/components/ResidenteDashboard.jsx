@@ -9,6 +9,7 @@ import {
   MantenimientoSeccion,
   ReservasSeccion,
   PagosSeccion,
+  ReportesSeccion,
 } from './ResidenteSecciones';
 
 // Importar sección de comunicación para residente
@@ -29,6 +30,7 @@ const ResidenteDashboard = () => {
     { id: 'mantenimiento', label: 'Mantenimiento', icon: '🔧' },
     { id: 'reservas', label: 'Reservas', icon: '📅' },
     { id: 'pagos', label: 'Pagos', icon: '💳' },
+    { id: 'reportes', label: 'Reportes', icon: '📄' },
     { id: 'comunicacion', label: 'Comunicación', icon: '💬' },
   ];
 
@@ -42,6 +44,8 @@ const ResidenteDashboard = () => {
         return <ReservasSeccion />;
       case 'pagos':
         return <PagosSeccion />;
+      case 'reportes':
+        return <ReportesSeccion />;
       case 'comunicacion':
         return <ComunicacionSeccion />;
       default:

@@ -5,6 +5,7 @@ import PersonaService from '../../services/PersonaService';
 import PagoService from '../../services/PagoService';
 import DeudaService from '../../services/DeudaService';
 import PasarelaPagos from '../shared/PasarelaPagos';
+import facturaService from '../../services/FacturaService';
 import ComprobantePago from '../shared/ComprobantePago';
 import toast from 'react-hot-toast';
 
@@ -120,6 +121,17 @@ const PagosSeccion = () => {
       // 2. Vincular pago a deuda y marcar como pagada
       await PagoService.vincularPagoADeuda(deudaSeleccionada.id_deuda, registroPago.data.id_pago);
       await DeudaService.marcarComoPagada(deudaSeleccionada.id_deuda, registroPago.data.id_pago);
+
+      // 2b. Marcar la factura asociada (si existe) como pagada y vincular pago
+      try {
+        await facturaService.marcarFacturaPagadaPorConcepto(
+          deudaSeleccionada.concepto,
+          deudaSeleccionada.id_persona,
+          registroPago.data.id_pago
+        );
+      } catch (e) {
+        console.warn('No se pudo actualizar factura desde pago:', e);
+      }
 
       toast.success('¡Pago registrado con éxito!');
       setShowPasarela(false);

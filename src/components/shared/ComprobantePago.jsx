@@ -1,13 +1,63 @@
 import { X, Download, Mail, Check } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
+import { jsPDF } from 'jspdf'
 
 export default function ComprobantePago({ isOpen, pago, onClose }) {
   if (!isOpen || !pago) return null
 
   const handleDescargarPDF = () => {
-    // TODO: Tu amigo - Implementar generación de PDF con jspdf
-    console.log('[ComprobantePago] Generar PDF:', pago)
-    alert('Función de PDF pendiente de implementar por backend')
+    try {
+      const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+
+      // Encabezado
+      doc.setFillColor('#10b981') // emerald-500
+      doc.rect(0, 0, doc.internal.pageSize.getWidth(), 60, 'F')
+      doc.setTextColor('#ffffff')
+      doc.setFontSize(16)
+      doc.text('Comprobante de Pago', 40, 38)
+
+      // Cuerpo
+      doc.setTextColor('#111827') // gray-900
+      doc.setFontSize(12)
+      let y = 100
+      const line = (label, value, bold = false) => {
+        doc.setFont(undefined, 'normal')
+        doc.setTextColor('#6b7280')
+        doc.text(label, 40, y)
+        doc.setTextColor('#111827')
+        if (bold) doc.setFont(undefined, 'bold')
+        const text = value ?? ''
+        doc.text(String(text), 220, y)
+        y += 24
+      }
+
+      line('N° Transacción:', pago.id_transaccion, true)
+      const fechaStr = new Date(pago.fecha).toLocaleString('es-BO')
+      line('Fecha y Hora:', fechaStr)
+      line('Concepto:', pago.concepto)
+      line('Método de Pago:', pago.metodo)
+      line('Pagador:', pago.pagador)
+      line('CI:', pago.ci)
+      y += 10
+      doc.setFontSize(14)
+      doc.setTextColor('#065f46') // emerald-900
+      doc.setFont(undefined, 'bold')
+      doc.text(`Monto Pagado: Bs ${Number(pago.monto || 0).toFixed(2)}`, 40, y)
+
+      // Pie de página
+      const pageH = doc.internal.pageSize.getHeight()
+      doc.setFontSize(9)
+      doc.setTextColor('#6b7280')
+      doc.text('Documento generado electrónicamente por el Sistema de Gestión', 40, pageH - 40)
+      doc.text(`Edificio Técnico Superior - ${new Date().getFullYear()}`, 40, pageH - 24)
+
+      // Guardar
+      const nombreArchivo = `Comprobante_${pago.id_transaccion}.pdf`
+      doc.save(nombreArchivo)
+    } catch (e) {
+      console.error('[ComprobantePago] Error generando PDF:', e)
+      alert('No se pudo generar el PDF. Intenta nuevamente.')
+    }
   }
 
   const handleEnviarEmail = () => {

@@ -16,6 +16,7 @@ import {
   CuentasSeccion,
   EntradasSeccion,
   FinanzasSeccion, // 👈 NUEVO
+  ServiciosBasicosSeccion,
 } from './AdminSecciones';
 
 // Nota: ComunicacionSeccion se importa ahora junto con el resto de secciones desde
@@ -41,6 +42,7 @@ const menuItems = [
   { id: 'residentes', label: 'Residentes', icon: '👨‍👩‍👧‍👦' },
   { id: 'personal', label: 'Personal', icon: '👥' },
   { id: 'servicios', label: 'Servicios', icon: '🔧' },
+  { id: 'servicios-basicos', label: 'Servicios Básicos', icon: '💧' },
   { id: 'incidentes', label: 'Incidentes', icon: '🚨' },
   { id: 'notificaciones', label: 'Notificaciones', icon: '🔔' },
   { id: 'comunicacion', label: 'Comunicación', icon: '💬' },
@@ -54,6 +56,7 @@ const menuItems = [
       case 'finanzas':    return <FinanzasSeccion />; // 👈 NUEVO
       case 'residentes':  return <ResidentesSeccion />;
       case 'servicios':   return <ServiciosSeccion />;
+  case 'servicios-basicos': return <ServiciosBasicosSeccion />;
       case 'notificaciones': return <NotificacionesSeccion />;
       case 'comunicacion':   return <ComunicacionSeccion />;
       case 'personal':    return <PersonalSeccion />;

@@ -9,3 +9,4 @@ export { default as ComunicacionSeccion } from './ComunicacionSeccion.jsx';
 export { default as CuentasSeccion } from './CuentasSeccion.jsx';
 export { default as EntradasSeccion } from './EntradasSeccion.jsx';
 export { default as FinanzasSeccion } from './FinanzasSeccion.jsx'; // 👈 NUEVO
+export { default as ServiciosBasicosSeccion } from './ServiciosBasicosSeccion.jsx';
