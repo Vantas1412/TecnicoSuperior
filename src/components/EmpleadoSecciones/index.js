@@ -8,6 +8,7 @@ export { default as VerTareas } from './VerTareas';
 export { default as InformeTrabajo } from './InformeTrabajo';
 export { default as MandarEvidencia } from './MandarEvidencia';
 export { default as ComunicacionSeccion } from './ComunicacionSeccion';
+export { default as ReportesSalarios } from './ReportesSalarios';
 
 // Sección adicional que proviene de la versión combinada original.  Permite
 // al personal de seguridad consultar las entradas registradas al edificio.

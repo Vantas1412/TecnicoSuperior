@@ -11,6 +11,8 @@ class EmailService {
     this.supabase = supabase;
     this.emailApiUrl = import.meta.env.VITE_EMAIL_API_URL || 'http://localhost:3001/api/send-email';
     this.fromEmail = import.meta.env.VITE_EMAIL_FROM || 'onboarding@resend.dev';
+    // Permite desactivar envíos reales en desarrollo para evitar errores de conexión y ruido en consola
+    this.enabled = (import.meta.env.VITE_EMAIL_ENABLED || 'false').toLowerCase() === 'true';
   }
 
   /**
@@ -26,6 +28,10 @@ class EmailService {
     const recipients = Array.isArray(destinatarios) ? destinatarios : [destinatarios];
     
     try {
+      if (!this.enabled) {
+        console.info('📧 EmailService: envío deshabilitado (VITE_EMAIL_ENABLED!=true). Se omite envío real.');
+        return { success: false, disabled: true };
+      }
       // Enviar correo real a través del servidor backend con Resend
       const response = await fetch(this.emailApiUrl, {
         method: 'POST',
@@ -41,9 +47,15 @@ class EmailService {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Error al enviar correo:', errorData);
-        throw new Error(errorData.error || 'Error al enviar correo');
+        let errorMsg = 'Error al enviar correo';
+        try {
+          const errorData = await response.json();
+          console.warn('EmailService: fallo envío:', errorData);
+          errorMsg = errorData.error || errorMsg;
+        } catch (_) {
+          console.warn('EmailService: fallo envío con respuesta no JSON');
+        }
+        return { success: false, error: errorMsg };
       }
 
       const result = await response.json();
@@ -62,10 +74,10 @@ class EmailService {
         console.error('Error registrando correos en la base de datos:', dbError);
       }
 
-      return result;
+      return { success: true, result };
     } catch (err) {
-      console.error('Error en EmailService.sendEmail:', err);
-      throw err;
+      console.warn('EmailService: envío omitido o fallido (no bloqueante):', err?.message || err);
+      return { success: false, error: err?.message || 'fetch_failed' };
     }
   }
 
@@ -127,7 +139,7 @@ class EmailService {
     try {
       const { data: usuario, error } = await this.supabase
         .from('usuario')
-        .select('correo_electronico, nombre')
+        .select('correo_electronico, username, persona(nombre)')
         .eq('id_usuario', id_usuario)
         .single();
       
@@ -135,12 +147,13 @@ class EmailService {
       
       if (usuario && usuario.correo_electronico) {
         const asunto = `🔔 Notificación: ${titulo}`;
-        const htmlContent = this.createNotificationTemplate(usuario.nombre, titulo, mensaje);
+        const nombreMostrar = usuario?.persona?.nombre || usuario?.username || 'Usuario';
+        const htmlContent = this.createNotificationTemplate(nombreMostrar, titulo, mensaje);
         await this.sendEmail(usuario.correo_electronico, asunto, htmlContent, 'notificacion');
       }
     } catch (err) {
-      console.error('Error enviando notificación por correo:', err);
-      throw err;
+      console.warn('EmailService: no se pudo enviar notificación (no bloqueante):', err?.message || err);
+      return { success: false };
     }
   }
 
@@ -154,7 +167,7 @@ class EmailService {
     try {
       const { data: usuario, error } = await this.supabase
         .from('usuario')
-        .select('correo_electronico, nombre')
+        .select('correo_electronico, username, persona(nombre)')
         .eq('id_usuario', id_usuario)
         .single();
       
@@ -162,12 +175,13 @@ class EmailService {
       
       if (usuario && usuario.correo_electronico) {
         const asunto = '✉️ Respuesta a su queja';
-        const htmlContent = this.createComplaintResponseTemplate(usuario.nombre, respuesta);
+        const nombreMostrar = usuario?.persona?.nombre || usuario?.username || 'Usuario';
+        const htmlContent = this.createComplaintResponseTemplate(nombreMostrar, respuesta);
         await this.sendEmail(usuario.correo_electronico, asunto, htmlContent, 'respuesta_queja');
       }
     } catch (err) {
-      console.error('Error enviando respuesta de queja por correo:', err);
-      throw err;
+      console.warn('EmailService: no se pudo enviar respuesta de queja (no bloqueante):', err?.message || err);
+      return { success: false };
     }
   }
 

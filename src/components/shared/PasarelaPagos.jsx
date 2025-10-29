@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, CreditCard, QrCode, Check, AlertCircle, Loader2, ArrowLeft } from 'lucide-react'
-import LibelulaService from '../../services/LibelulaService'
+import { QRCodeCanvas } from 'qrcode.react'
 import UsuarioService from '../../services/UsuarioService'
 import toast from 'react-hot-toast'
 
@@ -201,60 +201,28 @@ export default function PasarelaPagos({ isOpen, deuda, usuario, onSuccess, onErr
     setError(null)
 
     try {
-      // NOTA: QR es SIMULACRO - LibelulaService usa datos MOCK
-      // La tarjeta será reemplazada por Stripe (tu amigo)
-      const resultado = await LibelulaService.iniciarPago(deuda, formData, metodo)
-      
-      if (resultado.success) {
-        setOrdenId(resultado.data.orden_id)
-        
-        if (metodo === 'QR') {
-          // QR SIMULACRO - genera QR falso para demostración
-          setQrData(resultado.data.qr_data)
-          setPaso(3)
-          iniciarPollingQR(resultado.data.orden_id)
-        } else {
-          // TARJETA - Tu amigo implementará Stripe aquí
-          setPaso(3)
-        }
-      } else {
-        setError(resultado.error || 'Error al iniciar el pago')
-        toast.error('Error al procesar la solicitud')
+      // Simulación pura sin backend (Libélula removido)
+      const fakeOrdenId = 'ORD-' + Math.random().toString(36).slice(2, 10).toUpperCase()
+      setOrdenId(fakeOrdenId)
+      setPaso(3)
+      if (metodo === 'QR') {
+        // Podemos dejar qrData null y renderizar un QR generado en el cliente con QRCodeCanvas
+        setQrData(null)
+        // Aprobar en 10s automáticamente
+        setTimeout(() => {
+          setResultado({ estado: 'APPROVED', transaccion_id: fakeOrdenId + '-TX', fecha: new Date().toISOString() })
+          setPaso(4)
+          toast.success('¡Pago aprobado (simulado)!')
+        }, 10000)
       }
     } catch (err) {
-      console.error('Error al iniciar pago:', err)
-      setError('Error de conexión. Por favor intenta nuevamente.')
-      toast.error('Error de conexión')
+      console.warn('Error inesperado en simulación:', err)
     } finally {
       setLoading(false)
     }
   }
 
-  const iniciarPollingQR = (ordenIdParam) => {
-    // QR SIMULACRO - polling falso que aprueba automáticamente después de 10 segundos
-    const ordenIdActual = ordenIdParam || ordenId
-    
-    pollingRef.current = setInterval(async () => {
-      try {
-        const resultado = await LibelulaService.verificarEstadoPago(ordenIdActual)
-        
-        if (resultado.success && resultado.data.estado === 'APPROVED') {
-          clearInterval(pollingRef.current)
-          clearInterval(timerRef.current)
-          setResultado(resultado.data)
-          setPaso(4)
-          toast.success('¡Pago aprobado!')
-        } else if (resultado.success && resultado.data.estado === 'REJECTED') {
-          clearInterval(pollingRef.current)
-          clearInterval(timerRef.current)
-          setError('El pago fue rechazado')
-          toast.error('Pago rechazado')
-        }
-      } catch (err) {
-        console.error('Error verificando estado:', err)
-      }
-    }, 5000) // Verificar cada 5 segundos
-  }
+  // Polling eliminado (ya no se consulta backend)
 
   const handlePagarConTarjeta = async () => {
     // TODO: TU AMIGO - Implementar integración con Stripe
@@ -286,21 +254,11 @@ export default function PasarelaPagos({ isOpen, deuda, usuario, onSuccess, onErr
     setError(null)
 
     try {
-      // MOCK temporal - Tu amigo debe reemplazar esto con Stripe
-      const resultado = await LibelulaService.procesarPagoTarjeta(ordenId, datosTarjeta)
-      
-      if (resultado.success) {
-        setResultado(resultado.data)
-        setPaso(4)
-        toast.success('¡Pago aprobado!')
-      } else {
-        setError(resultado.error || 'Pago rechazado')
-        toast.error(resultado.error || 'Pago rechazado')
-      }
-    } catch (err) {
-      console.error('Error procesando tarjeta:', err)
-      setError('Error al procesar el pago')
-      toast.error('Error al procesar el pago')
+      // Simulación local: aprueba inmediatamente
+      const txId = (ordenId || 'ORD') + '-TX'
+      setResultado({ estado: 'APPROVED', transaccion_id: txId, fecha: new Date().toISOString() })
+      setPaso(4)
+      toast.success('¡Pago aprobado (simulado)!')
     } finally {
       setLoading(false)
     }
@@ -602,18 +560,22 @@ export default function PasarelaPagos({ isOpen, deuda, usuario, onSuccess, onErr
                   </div>
 
                   <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-2xl p-8">
-                    {qrData && (
-                      <div className="flex justify-center mb-6">
-                        <div className="relative">
-                          <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl blur-xl opacity-30 animate-pulse"></div>
+                    <div className="flex justify-center mb-6">
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl blur-xl opacity-30 animate-pulse"></div>
+                        {qrData ? (
                           <img 
                             src={qrData} 
                             alt="QR Code" 
                             className="relative w-72 h-72 border-8 border-white rounded-2xl shadow-2xl"
                           />
-                        </div>
+                        ) : (
+                          <div className="relative w-72 h-72 border-8 border-white rounded-2xl shadow-2xl bg-white flex items-center justify-center">
+                            <QRCodeCanvas value={ordenId || 'ORD'} size={240} includeMargin={true} />
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </div>
 
                     <div className="bg-white rounded-xl p-5 mb-6 shadow-md">
                       <div className="flex items-center justify-between mb-3">

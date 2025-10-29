@@ -26,6 +26,11 @@ Sistema completo de gestión para edificios residenciales con panel de administr
 ### 1. Instalar dependencias principales
 ```bash
 npm install
+
+```
+### por si acaso si no se instalo para los pdfs
+```bash
+npm i jspdf
 ```
 
 ### 2. Configurar servidor de correos

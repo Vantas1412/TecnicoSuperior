@@ -13,7 +13,8 @@ import {
   InformeTrabajo,
   MandarEvidencia,
   ComunicacionSeccion,
-  EntradasEmpleadoSeccion
+  EntradasEmpleadoSeccion,
+  ReportesSalarios
 } from './EmpleadoSecciones';
 
 const EmpleadoDashboard = () => {
@@ -35,6 +36,7 @@ const EmpleadoDashboard = () => {
     { id: 'informe', label: 'Informe de Trabajo', icon: '📋' },
     { id: 'evidencia', label: 'Mandar Evidencia', icon: '📎' },
     { id: 'comunicacion', label: 'Comunicación', icon: '💬' },
+    { id: 'reportes', label: 'Reportes de Salario', icon: '🧾' },
   ];
 
   // Añadimos "Entradas" si el usuario es de tipo Seguridad
@@ -57,6 +59,8 @@ const EmpleadoDashboard = () => {
       case 'entradas':
         // Sólo renderizar EntradasEmpleadoSeccion si el usuario es de tipo Seguridad
         return <EntradasEmpleadoSeccion />;
+      case 'reportes':
+        return <ReportesSalarios />;
       default:
         return <DashboardSeccion />;
     }

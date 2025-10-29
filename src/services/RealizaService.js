@@ -74,6 +74,24 @@ class RealizaService {
       return { success: false, error: error.message };
     }
   }
+
+  // Pagos recibidos por una persona (beneficiario)
+  async obtenerPagosRecibidosPorPersona(id_persona) {
+    try {
+      const { data, error } = await this.supabase
+        .from('realiza')
+        .select('id_pago, pago(*)')
+        .eq('id_beneficiario', id_persona)
+        .order('id_realiza', { ascending: false });
+      if (error) throw error;
+      // Normalizar a una lista de pagos
+      const pagos = (data || []).map((r) => ({ ...(r.pago || {}), id_pago: r.id_pago }));
+      return { success: true, data: pagos };
+    } catch (error) {
+      console.error('Error al obtener pagos recibidos por persona:', error);
+      return { success: false, error: error.message, data: [] };
+    }
+  }
 }
 
 const realizaService = new RealizaService();

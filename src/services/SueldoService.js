@@ -74,6 +74,28 @@ class SueldoService {
       return { success: false, error: error.message };
     }
   }
+
+  // Registra un pago de sueldo como un asiento en la tabla sueldo (opcional para historial)
+  async registrarPagoSueldo({ id_empleado, monto, fecha, estado = 'Pagado' }) {
+    try {
+      const payload = {
+        id_empleado,
+        monto: Number(monto || 0),
+        fecha: (fecha || new Date().toISOString().slice(0, 10)),
+        estado
+      };
+      const { data, error } = await this.supabase
+        .from('sueldo')
+        .insert([payload])
+        .select()
+        .single();
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error al registrar pago de sueldo:', error);
+      return { success: false, error: error.message };
+    }
+  }
 }
 
 const sueldoService = new SueldoService();

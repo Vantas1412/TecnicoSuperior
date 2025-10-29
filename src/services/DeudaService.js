@@ -78,9 +78,12 @@ class DeudaService {
   // ================== LIBÉLULA INTEGRACIÓN ==================
   async marcarComoPagada(idDeuda, idPago) {
     try {
+      if (!idDeuda) {
+        return { success: false, error: 'idDeuda requerido' };
+      }
       const { data, error } = await this.supabase
         .from('deuda')
-        .update({ estado: 'Pagado', id_pago: idPago, fecha_pago: new Date() })
+        .update({ estado: 'Pagado' })
         .eq('id_deuda', idDeuda)
         .select()
         .single();
@@ -119,6 +122,31 @@ class DeudaService {
     } catch (error) {
       console.error('Error al obtener deudas con pagos:', error);
       return { success: false, error: error.message, data: [] };
+    }
+  }
+
+  async buscarPorConcepto(id_persona, concepto) {
+    try {
+      const q = this.supabase
+        .from('deuda')
+        .select('id_deuda')
+        .eq('id_persona', id_persona)
+        .eq('concepto', concepto)
+        .limit(1);
+
+      let data, error;
+      if (typeof q.maybeSingle === 'function') {
+        ({ data, error } = await q.maybeSingle());
+        if (error) throw error;
+        return { success: true, data: data || null };
+      } else {
+        ({ data, error } = await q);
+        if (error) throw error;
+        return { success: true, data: (data && data[0]) || null };
+      }
+    } catch (error) {
+      console.error('Error al buscar deuda por concepto:', error);
+      return { success: false, error: error.message, data: null };
     }
   }
 }

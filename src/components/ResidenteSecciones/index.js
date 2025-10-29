@@ -4,3 +4,4 @@ export { default as MantenimientoSeccion } from './MantenimientoSeccion';
 export { default as ReservasSeccion } from './ReservasSeccion';
 export { default as PagosSeccion } from './PagosSeccion';
 export { default as ComunicacionSeccion } from './ComunicacionSeccion';
+export { default as ReportesSeccion } from './ReportesSeccion';
