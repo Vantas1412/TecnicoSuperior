@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import supabase from '../../services/dbConnection';
 import ComprobantePago from '../shared/ComprobantePago';
+import PersonaService from '../../services/PersonaService';
 
 export default function ReportesSeccion() {
   const { profile, user } = useAuth();
   const idPersona = profile?.persona?.id_persona || profile?.id_persona || user?.id_persona;
   const [facturas, setFacturas] = useState([]);
+  const [pagos, setPagos] = useState([]);
   const [modal, setModal] = useState({ open: false, pago: null });
 
   const cargar = async () => {
@@ -18,6 +20,14 @@ export default function ReportesSeccion() {
       .eq('estado', 'pagada')
       .order('fecha_emision', { ascending: false });
     setFacturas(data || []);
+
+    // Cargar pagos persistidos para este pagador
+    try {
+      const resPagos = await PersonaService.obtenerPagosPorPagador(idPersona);
+      setPagos(resPagos.success ? (resPagos.data || []) : []);
+    } catch (_) {
+      setPagos([]);
+    }
   };
 
   useEffect(() => { cargar(); }, [idPersona]);
@@ -33,6 +43,21 @@ export default function ReportesSeccion() {
         monto: Number(f.total || 0),
         metodo: 'Simulado',
         pagador: profile?.persona?.nombre || profile?.username || 'Usuario',
+        ci: profile?.ci || 'N/A'
+      }
+    });
+  };
+
+  const verComprobantePago = (p) => {
+    setModal({
+      open: true,
+      pago: {
+        id_transaccion: p.id_pago,
+        fecha: p.fecha || new Date().toISOString(),
+        concepto: p.concepto,
+        monto: Number(p.monto || 0),
+        metodo: p.metodo_pago || 'Simulado',
+        pagador: `${profile?.persona?.nombre || ''} ${profile?.persona?.apellido || ''}`.trim() || profile?.username || 'Usuario',
         ci: profile?.ci || 'N/A'
       }
     });
@@ -69,6 +94,42 @@ export default function ReportesSeccion() {
             {facturas.length === 0 && (
               <tr>
                 <td colSpan={6} className="p-6 text-center text-gray-500">Aún no tienes facturas pagadas</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Historial de Pagos Persistentes */}
+      <h2 className="text-2xl font-bold text-gray-800 mt-10 mb-4">Historial de Pagos</h2>
+      <div className="bg-white rounded-lg shadow overflow-x-auto">
+        <table className="min-w-full">
+          <thead>
+            <tr className="border-b bg-gray-50">
+              <th className="text-left text-xs font-semibold text-gray-600 p-3">Concepto</th>
+              <th className="text-left text-xs font-semibold text-gray-600 p-3">Descripción</th>
+              <th className="text-left text-xs font-semibold text-gray-600 p-3">Monto</th>
+              <th className="text-left text-xs font-semibold text-gray-600 p-3">Fecha</th>
+              <th className="text-left text-xs font-semibold text-gray-600 p-3">Método</th>
+              <th className="text-left text-xs font-semibold text-gray-600 p-3">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pagos.map((p) => (
+              <tr key={p.id_pago} className="border-b hover:bg-gray-50">
+                <td className="p-3 text-sm text-gray-800">{p.concepto}</td>
+                <td className="p-3 text-sm text-gray-600">{p.descripcion}</td>
+                <td className="p-3 text-sm text-green-700 font-semibold">Bs {Number(p.monto || 0).toFixed(2)}</td>
+                <td className="p-3 text-sm text-gray-500">{p.fecha ? new Date(p.fecha).toLocaleDateString() : '-'}</td>
+                <td className="p-3 text-sm text-gray-700">{p.metodo_pago || 'Simulado'}</td>
+                <td className="p-3 text-sm">
+                  <button onClick={() => verComprobantePago(p)} className="px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700">Descargar PDF</button>
+                </td>
+              </tr>
+            ))}
+            {pagos.length === 0 && (
+              <tr>
+                <td colSpan={6} className="p-6 text-center text-gray-500">Aún no tienes pagos registrados</td>
               </tr>
             )}
           </tbody>

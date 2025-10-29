@@ -35,6 +35,9 @@ export default function ComprobantePago({ isOpen, pago, onClose }) {
       const fechaStr = new Date(pago.fecha).toLocaleString('es-BO')
       line('Fecha y Hora:', fechaStr)
       line('Concepto:', pago.concepto)
+      if (pago.banco) {
+        line('Banco:', pago.banco)
+      }
       line('Método de Pago:', pago.metodo)
       line('Pagador:', pago.pagador)
       line('CI:', pago.ci)
@@ -124,6 +127,12 @@ export default function ComprobantePago({ isOpen, pago, onClose }) {
                   <td className="py-3 text-gray-600 font-medium">Concepto:</td>
                   <td className="py-3 text-right font-semibold text-gray-900">{pago.concepto}</td>
                 </tr>
+                {pago.banco && (
+                  <tr className="border-b border-gray-200">
+                    <td className="py-3 text-gray-600 font-medium">Banco:</td>
+                    <td className="py-3 text-right font-semibold text-gray-900">{pago.banco}</td>
+                  </tr>
+                )}
                 <tr className="border-b border-gray-200">
                   <td className="py-3 text-gray-600 font-medium">Método de Pago:</td>
                   <td className="py-3 text-right">
